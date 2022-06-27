@@ -47,7 +47,7 @@ namespace Gi
             // this.player = clientState.LocalPlayer;
 
             // Get or create a configuration object
-            this.config = new Configuration(pi);
+            this.config = Configuration.Load(pi);
             
             // Initialize the UI
             this.window = new PluginWindow(config);

@@ -59,11 +59,15 @@ namespace Gi
 
         public static Configuration Load(DalamudPluginInterface pi)
         {
-            var configFile = pi.ConfigFile.ToString();
-            var content = File.ReadAllText(configFile);
-            var config = JsonConvert.DeserializeObject<Configuration>(content);
-            config.pluginInterface = pi;
-            return config;
+            try {
+                var configFile = pi.ConfigFile.ToString();
+                var content = File.ReadAllText(configFile);
+                var config = JsonConvert.DeserializeObject<Configuration>(content);
+                config.pluginInterface = pi;
+                return config;
+            } catch(Exception e) {
+                return new Configuration(pi);
+            }
         }
 
         public Dictionary<uint, string> GetActionsInMonitor()
