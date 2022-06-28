@@ -67,26 +67,14 @@ namespace Gi
             this.useActionHook.Enable();
         }
 
-        // private Hook<ControllerPoll> controllerPoll;
-        // private delegate int ControllerPoll(IntPtr controllerInput);
-        // private int ControllerPollDetour(IntPtr controllerInput)
-        // {
-        //     var original = this.gamepadPoll.Original(gamepadInput);
-        //     try {
-        //         var input = (GamepadInput*)gamepadInput;
-        //         this.ButtonsPressed = input->ButtonsPressed;
-        //         this.ButtonsReleased = input->ButtonsReleased;
-        //         this.ButtonsRepeat = input->ButtonsRepeat;
-        // }
-     
         private Hook<UseActionDelegate> useActionHook;
         private delegate byte UseActionDelegate(IntPtr actionManager, uint actionType, uint actionID, long targetedActorID, uint param, uint useType, int pvp, IntPtr a8);
         private byte UseActionDetour(IntPtr actionManager, uint actionType, uint actionID, long targetedActorID, uint param, uint useType, int pvp, IntPtr a8)
         {
             byte ret = 0;
             var a = this.gsAction;
-            // bool inParty = this.partyList.Length > 0;
-            bool inParty = true;
+            bool inParty = this.partyList.Length > 0 || this.config.debug;  // <---
+            // bool inParty = true;
             var pmap = this.GetSortedPartyMemberIDs();
         
             // PluginLog.Log($"ActionID: {actionID}, SavedActionID: {a.actionID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
@@ -100,8 +88,6 @@ namespace Gi
                         // 1. Only use [up down left right y a x b]
                         // 2. Resolve buttons priority
                         // 目前GSM只在lt/rt按下, 即激活十字热键栏预备施放技能时可用.
-                        // 好处是省去了判断上一时刻和现在的button state的异同(eg: 是不是一直在hold button???).
-                        // 坏处是不够灵活?
                         int buttons = (ginput->ButtonsPressed & 0x00ff);
                         // 1 0 1 0 Prev
                         // 1 1 0 0 Now
@@ -114,7 +100,7 @@ namespace Gi
                         var order = this.actions[a.actionID].ToLower().Trim().Split(" ").Where((a) => a != "").ToList();
                         var gsTargetedActorIndex = order.FindIndex((b) => ButtonMap.ContainsKey(b) ? (ButtonMap[b] & buttons) > 0 : false);
                         
-                        PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}");
+                        PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2):D16}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2):D16}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2):D16}");
                         if (pmap.Count > 0) {
                             gsTargetedActorIndex = gsTargetedActorIndex == -1 ? 0 : (gsTargetedActorIndex >= pmap.Count - 1 ? pmap.Count - 1 : gsTargetedActorIndex);
                             
@@ -140,6 +126,10 @@ namespace Gi
                 this.savedButtonsPressed = 0;
                 this.inGamepadSelectionMode = false;
             } else {
+                // Cast normally if:
+                //  1. We are not in party
+                //  2. Action not in monitor
+                //  3. We already target a party member
                 if (!inParty || !this.actions.ContainsKey(actionID) || pmap.Contains((uint)targetedActorID)) {
                     ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
                 } else {

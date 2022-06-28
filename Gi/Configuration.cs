@@ -27,18 +27,20 @@ namespace Gi
 
         #region Saved configuration values
         [JsonProperty]
-        public List<string> skillsInGSM {get; set; } = new List<string>() {
-            "均衡诊断", "白牛清汁", "出卡"
-        };
+        public bool debug {get; set; } = false;
+        [JsonProperty]
+        public List<string> actionsInMonitor {get; set; }
+        // public List<string> actionsInMonitor {get; set; } = new List<string>() {
+            // "均衡诊断", "白牛清汁", "灵橡清汁", "出卡"
+        // };
         [JsonProperty]
         public string selectOrder {get; set; } = "y b a x right down up left";
         [JsonProperty]
-        public string partyMemeberSortOrder {get; set; } = "thmr";
+        public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
         [JsonProperty]
         public Dictionary<uint, string> rules {get; set; } = new Dictionary<uint, string>();
         #endregion
 
-        public DalamudPluginInterface pluginInterface;
         public Dictionary<string, uint> actions = new Dictionary<string, uint> {
             {"均衡诊断", 24284},
             {"白牛清汁", 24303},
@@ -51,30 +53,46 @@ namespace Gi
 
             {"出卡", 17055}
         };
+        
+        private DalamudPluginInterface pluginInterface;
+        private DirectoryInfo root;
+        internal string configFile;
+        internal string fontFile;
+        internal string assetFile;
 
-        public Configuration(DalamudPluginInterface pi)
-        {
-            this.pluginInterface = pi;
+        public Configuration() {}
+
+        private static void Initialize(Configuration config, DalamudPluginInterface pi) {
+            config.pluginInterface = pi;
+            config.root = pi.ConfigDirectory;
+            var cd = config.root.ToString();
+            config.configFile = cd + $"/{pi.ConfigFile.Name}";
+            config.fontFile = cd + "/Font.ttf";
+            config.assetFile = cd + "/Actions.json";
         }
-
+        
         public static Configuration Load(DalamudPluginInterface pi)
         {
+            Configuration config;
+            
             try {
-                var configFile = pi.ConfigFile.ToString();
+                var configFile = pi.ConfigDirectory.ToString() + $"/{pi.ConfigFile.Name}";
                 var content = File.ReadAllText(configFile);
-                var config = JsonConvert.DeserializeObject<Configuration>(content);
-                config.pluginInterface = pi;
-                return config;
+                config = JsonConvert.DeserializeObject<Configuration>(content);
             } catch(Exception e) {
-                return new Configuration(pi);
+                PluginLog.Log($"Exception: {e}");
+                config = new Configuration();
             }
+        
+            Configuration.Initialize(config, pi);
+            return config;
         }
 
         public Dictionary<uint, string> GetActionsInMonitor()
         {
             var d = new Dictionary<uint, string>();
             try {
-                foreach(string s in this.skillsInGSM) {
+                foreach(string s in this.actionsInMonitor) {
                     if (this.actions.ContainsKey(s)) {
                         d.Add(this.actions[s], this.selectOrder);
                     }
@@ -94,7 +112,7 @@ namespace Gi
 
             try {
                 var config = JsonConvert.DeserializeObject<Configuration>(content);
-                this.skillsInGSM = config.skillsInGSM;
+                this.actionsInMonitor = config.actionsInMonitor;
                 this.selectOrder = config.selectOrder;
                 this.partyMemeberSortOrder = config.partyMemeberSortOrder;
                 this.rules = config.rules;
@@ -116,8 +134,7 @@ namespace Gi
             try {
 
                 content = JsonConvert.SerializeObject(this, Formatting.Indented);
-                // this.pluginInterface.SavePluginConfig(this);
-                File.WriteAllText(this.pluginInterface.ConfigFile.ToString(), content);
+                File.WriteAllText(this.configFile, content);
             } catch(Exception e) {
                 PluginLog.Log($"Exception: {e}");
             }
