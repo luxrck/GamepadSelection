@@ -100,7 +100,6 @@ namespace Gi
                         var order = this.actions[a.actionID].ToLower().Trim().Split(" ").Where((a) => a != "").ToList();
                         var gsTargetedActorIndex = order.FindIndex((b) => ButtonMap.ContainsKey(b) ? (ButtonMap[b] & buttons) > 0 : false);
                         
-                        PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2):D16}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2):D16}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2):D16}");
                         if (pmap.Count > 0) {
                             gsTargetedActorIndex = gsTargetedActorIndex == -1 ? 0 : (gsTargetedActorIndex >= pmap.Count - 1 ? pmap.Count - 1 : gsTargetedActorIndex);
                             
@@ -110,6 +109,8 @@ namespace Gi
                             }
                             a.targetedActorID = gsTargetedActorID;
                         }
+                        
+                        PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
 
                         // PluginLog.Log($"[Buddy] ID: {0}, Length: {this.buddyList.Length}, index: {gsTargetedActorIndex}");
                         // if (this.buddyList.Length > 0) {
@@ -164,22 +165,26 @@ namespace Gi
         private List<uint> GetSortedPartyMemberIDs(string order = "thmr")
         {
             uint selfId = 0;
-            if (this.clientState.LocalPlayer)
+            string selfName = "";
+            if (this.clientState.LocalPlayer is not null) {
                 selfId = this.clientState.LocalPlayer.ObjectId;
+                selfName = this.clientState.LocalPlayer.Name.ToString();
+            }
 
-            var me = new List<(uint, uint)>() {(0, selfId)};
+            var me = new List<(uint, uint, string)>() {(0, selfId, selfName)};
 
-            var t = new List<(uint, uint)>();
-            var h = new List<(uint, uint)>();
-            var m = new List<(uint, uint)>();
-            var pr = new List<(uint, uint)>();
-            var mr = new List<(uint, uint)>();
+            var t = new List<(uint, uint, string)>();
+            var h = new List<(uint, uint, string)>();
+            var m = new List<(uint, uint, string)>();
+            var pr = new List<(uint, uint, string)>();
+            var mr = new List<(uint, uint, string)>();
             
             foreach (PartyMember p in this.partyList) {
                 var pid = p.ObjectId;
                 if (pid == selfId) continue;
                 
                 var classId = p.ClassJob.Id;
+                var name = p.Name.ToString();
                 
                 switch (classId)
                 {
@@ -187,42 +192,42 @@ namespace Gi
                     case 33:
                     case 28:
                     case 40:
-                        h.Add((classId, pid));
+                        h.Add((classId, pid, name));
                         break;
                     case 19:
                     case 21:
                     case 32:
                     case 37:
-                        t.Add((classId, pid));
+                        t.Add((classId, pid, name));
                         break;
                     case 20:
                     case 22:
                     case 30:
                     case 34:
                     case 39:
-                        m.Add((classId, pid));
+                        m.Add((classId, pid, name));
                         break;
                     case 23:
                     case 31:
                     case 38:
-                        pr.Add((classId, pid));
+                        pr.Add((classId, pid, name));
                         break;
                     case 25:
                     case 27:
                     case 35:
-                        mr.Add((classId, pid));
+                        mr.Add((classId, pid, name));
                         break;
                     default:
                         break;
                 }
             }
 
-            t.Sort((a,b) => a.Item1.CompareTo(b.Item1));
-            h.Sort((a,b) => a.Item1.CompareTo(b.Item1));
-            m.Sort((a,b) => a.Item1.CompareTo(b.Item1));
-            pr.Sort((a,b) => a.Item1.CompareTo(b.Item1));
-            mr.Sort((a,b) => a.Item1.CompareTo(b.Item1));
-
+            t = t.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
+            h = h.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
+            m = m.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
+            pr = pr.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
+            mr = mr.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
+            
             foreach(char a in order) {
                 switch (a)
                 {

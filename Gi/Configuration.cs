@@ -17,9 +17,10 @@ namespace Gi
         public UpdateActionsInMonitorDelegate UpdateActionsInMonitor;
 
         // {
-        //     "skillsInGSM": [],
-        //     "selectOrder": "",
-        //     "partyMemeberSortOrder": "s t t h m m r r",
+        //     "debug": false,
+        //     "actionsInMonitor": [],
+        //     "selectOrder": "y b a x right down up left",
+        //     "partyMemeberSortOrder": "thmr",
         //     "rules": {
         //         "均衡诊断": "y b a x right down up left"
         //     }
@@ -29,7 +30,7 @@ namespace Gi
         [JsonProperty]
         public bool debug {get; set; } = false;
         [JsonProperty]
-        public List<string> actionsInMonitor {get; set; }
+        public List<string> actionsInMonitor {get; set; } = new List<string>();
         // public List<string> actionsInMonitor {get; set; } = new List<string>() {
             // "均衡诊断", "白牛清汁", "灵橡清汁", "出卡"
         // };
@@ -60,25 +61,25 @@ namespace Gi
         internal string fontFile;
         internal string assetFile;
 
-        public Configuration() {}
-
         private static void Initialize(Configuration config, DalamudPluginInterface pi) {
             config.pluginInterface = pi;
             config.root = pi.ConfigDirectory;
             var cd = config.root.ToString();
             config.configFile = cd + $"/{pi.ConfigFile.Name}";
-            config.fontFile = cd + "/Font.ttf";
+            config.fontFile = cd + "/Font.otf";
             config.assetFile = cd + "/Actions.json";
         }
         
         public static Configuration Load(DalamudPluginInterface pi)
         {
-            Configuration config;
+            Configuration config = null;
             
             try {
                 var configFile = pi.ConfigDirectory.ToString() + $"/{pi.ConfigFile.Name}";
                 var content = File.ReadAllText(configFile);
                 config = JsonConvert.DeserializeObject<Configuration>(content);
+                if (config is null)
+                    config = new Configuration();
             } catch(Exception e) {
                 PluginLog.Log($"Exception: {e}");
                 config = new Configuration();
@@ -112,6 +113,10 @@ namespace Gi
 
             try {
                 var config = JsonConvert.DeserializeObject<Configuration>(content);
+                
+                if (config is null) return false;
+                
+                this.debug = config.debug;
                 this.actionsInMonitor = config.actionsInMonitor;
                 this.selectOrder = config.selectOrder;
                 this.partyMemeberSortOrder = config.partyMemeberSortOrder;
