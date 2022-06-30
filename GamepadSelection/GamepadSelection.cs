@@ -123,7 +123,9 @@ namespace GamepadSelection
                             a.targetedActorID = gsTargetedActorID;
                         }
                         
-                        PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
+                        if (this.config.debug) {
+                            PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
+                        }
 
                         // PluginLog.Log($"[Buddy] ID: {0}, Length: {this.buddyList.Length}, index: {gsTargetedActorIndex}");
                         // if (this.buddyList.Length > 0) {

@@ -97,7 +97,9 @@ namespace GamepadSelection
         }
 
         private bool Save() {
-            PluginLog.Log($"Update config: {this.content}");
+            if (this.config.debug) {
+                PluginLog.Log($"Update config: {this.content}");
+            }
             if (this.config.Update(this.content)) {
                 this.config.Save();
                 return true;
