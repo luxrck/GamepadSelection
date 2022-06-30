@@ -73,7 +73,33 @@ namespace GamepadSelection
             {"生命活性法", 189},
             {"深谋远虑之策", 7434},
             {"以太契约", 7423},
-            {"生命回生法", 25867}
+            {"生命回生法", 25867},
+
+            {"Diagnosis", 24284},
+            {"Eukrasian Diagnosis", 24284},
+            {"Taurochole", 24303},
+            {"Druochole", 24296},
+            {"Krasis", 24317},
+            {"Haima", 24305},
+
+            {"Divine Benison", 7432},
+            {"Tetragrammaton", 3570},
+            {"Aquaveil", 25861},
+            {"Afflatus Solace", 16531},
+
+            {"Essential Dignity", 3614},
+            {"Play", 17055},
+            {"Aspected Benefic", 3595},
+            {"Synastry", 8918},
+            {"Crown Play", 25869},
+            {"Celestial Intersection", 16556},
+            {"Exaltation", 25873},
+
+            {"Adloquium", 185},
+            {"Lustrate", 189},
+            {"Excogitation", 7434},
+            {"Aetherpact", 7423},
+            {"Protraction", 25867},
         };
 
         private DalamudPluginInterface pluginInterface;

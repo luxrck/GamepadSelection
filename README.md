@@ -3,7 +3,7 @@ Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select part
 ❗: Should use the default ClassJob sort order in game settings.
 
 # Usage
-**Step 1**: Press a button to trigger an monitored action, like `均衡诊断`, not execute it.
+**Step 1**: Press a button to trigger an monitored action, like `Eukrasian Diagnosis`, not execute it.
 
 **Step 2**: Press a button to select a party member and execute that action to the target immediately.
 
@@ -29,10 +29,8 @@ Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select part
 {
   "debug": false,
   "actionsInMonitor": [
-    "均衡诊断",
-    "白牛清汁",
-    "灵橡清汁",
-    "输血"
+    "Druochole",
+    "Haima"
   ],
 
   // Should restore to the default ClassJob sort order in game settings first in order to get the right mapping.
@@ -48,10 +46,10 @@ Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select part
   // Val: SelectOrder string, will use `selectOrder` value in config if val is "" or "default".
   "rules": {
     // Use a different select order for specific action.
-    "吉星相位": "y a x b up down left right",
+    "Aspected Benefic": "y a x b up down left right",
 
     // Could add other actions which this plugin are not built-in.
-    // ActionID: 16556 → 天星交错
+    // ActionID: 16556 → "Celestial Intersection"
     "16556": "default",
   }
 }
@@ -60,8 +58,9 @@ Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select part
 # Pre-included Actions
 ```csharp
 {
+    // zh
     {"诊断", 24284},
-    // 均衡诊断是24291, 但UseAction的参数ActionID却使用的是24284
+    // 均衡诊断的ID是24291, 但UseAction使用的参数是24284
     {"均衡诊断", 24284},
     {"白牛清汁", 24303},
     {"灵橡清汁", 24296},
@@ -86,5 +85,32 @@ Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select part
     {"深谋远虑之策", 7434},
     {"以太契约", 7423},
     {"生命回生法", 25867}
-};
+
+    // en
+    {"Diagnosis", 24284}
+    {"Eukrasian Diagnosis", 24284}
+    {"Taurochole", 24303},
+    {"Druochole", 24296},
+    {"Krasis", 24317},
+    {"Haima", 24305},
+
+    {"Divine Benison", 7432},
+    {"Tetragrammaton", 3570},
+    {"Aquaveil", 25861},
+    {"Afflatus Solace", 16531},
+
+    {"Essential Dignity", 3614},
+    {"Play", 17055},
+    {"Aspected Benefic", 3595},
+    {"Synastry", 8918},
+    {"Crown Play", 25869},
+    {"Celestial Intersection", 16556},
+    {"Exaltation", 25873},
+
+    {"Adloquium", 185},
+    {"Lustrate", 189},
+    {"Excogitation", 7434},
+    {"Aetherpact", 7423},
+    {"Protraction", 25867},
+}
 ```
