@@ -81,7 +81,7 @@ namespace GamepadSelection
     b   |   ○   |   e:East
     a   |   x   |   s:South
     x   |   □   |   w:West")]
-        public void CommandGs(string command, string args)
+        public void CommandGi(string command, string args)
         {
             if (args is null || args == "") {
                 this.window.Toggle();
