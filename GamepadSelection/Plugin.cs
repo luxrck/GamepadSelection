@@ -17,19 +17,19 @@ namespace GamepadSelection
 {
     public class Plugin : IDalamudPlugin
     {
-        private readonly DalamudPluginInterface pluginInterface;
-        private readonly ChatGui chat;
-        private readonly ClientState clientState;
+        internal readonly DalamudPluginInterface pluginInterface;
+        internal readonly ChatGui chat;
+        internal readonly ClientState clientState;
 
-        private readonly PluginCommandManager<Plugin> commandManager;
-        private readonly Configuration config;
-        private readonly PluginWindow window;
-        private readonly WindowSystem windowSystem;
+        internal readonly PluginCommandManager<Plugin> commandManager;
+        internal readonly Configuration config;
+        internal readonly PluginWindow window;
+        internal readonly WindowSystem windowSystem;
 
-        private GamepadSelection GamepadSelection;
-        private PartyList partyList;
-        private BuddyList buddyList;
-        private GamepadState gamepad;
+        internal GamepadSelection GamepadSelection;
+        internal PartyList partyList;
+        internal BuddyList buddyList;
+        internal GamepadState gamepad;
 
         public string Name => "Gamepad Selection (for Healers)";
 
@@ -63,8 +63,9 @@ namespace GamepadSelection
             // Load all of our commands
             this.commandManager = new PluginCommandManager<Plugin>(this, commands);
             
-            this.GamepadSelection = new GamepadSelection(this.clientState, this.gamepad, this.partyList, this.buddyList, this.config);
 
+            // this.GamepadSelection = new GamepadSelection(this.clientState, this.gamepad, this.partyList, this.buddyList, this.config);
+            this.GamepadSelection = new GamepadSelection(this);
         }
         
         [Command("/gi")]
@@ -136,12 +137,16 @@ namespace GamepadSelection
             }
         }
 
-        private void Echo(string s)
+        public void Echo(string s)
         {
             this.chat.PrintChat(new XivChatEntry() {
                 Message = s,
                 Type = XivChatType.Debug,
             });
+        }
+
+        public void Error(string s) {
+            this.chat.PrintError(s);
         }
 
         #region IDisposable Support

@@ -56,13 +56,14 @@ namespace GamepadSelection
         private Configuration config;
         // private BuddyList buddyList;
 
-        public GamepadSelection(ClientState clientState, GamepadState gamepad, PartyList partyList, BuddyList buddyList, Configuration config) {
-            this.clientState = clientState;
-            this.gamepad = gamepad;
-            this.partyList = partyList;
-            this.config = config;
+        // public GamepadSelection(ClientState clientState, GamepadState gamepad, PartyList partyList, BuddyList buddyList, Configuration config) {
+        public GamepadSelection(Plugin p) {
+            this.clientState = p.clientState;
+            this.gamepad = p.gamepad;
+            this.partyList = p.partyList;
+            this.config = p.config;
 
-            this.actions = config.GetActionsInMonitor();
+            this.actions = p.config.GetActionsInMonitor();
             // this.buddyList = buddyList;
             this.gsAction = new UseActionArgs();
 
@@ -87,7 +88,9 @@ namespace GamepadSelection
             // bool inParty = true;
             var pmap = this.GetSortedPartyMemberIDs();
         
-            // PluginLog.Log($"ActionID: {actionID}, SavedActionID: {a.actionID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
+            if (this.config.debug) {
+                PluginLog.Log($"ActionID: {actionID}, SavedActionID: {a.actionID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
+            }
             // PluginLog.Log($"Me: {pmap[0]}, ClassJob: {this.clientState.LocalPlayer.ClassJob.Id} inParty: {inParty}");
 
             if (this.inGamepadSelectionMode) {
