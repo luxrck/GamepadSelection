@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Gi.Attributes
+namespace GamepadSelection.Attributes
 {
     [AttributeUsage(AttributeTargets.Method)]
     public class HelpMessageAttribute : Attribute

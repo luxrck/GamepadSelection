@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30114.105
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Gi", "Gi\Gi.csproj", "{B030A6EE-2A07-45AC-B63E-9B18445F4BC9}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GamepadSelection", "GamepadSelection\GamepadSelection.csproj", "{B030A6EE-2A07-45AC-B63E-9B18445F4BC9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

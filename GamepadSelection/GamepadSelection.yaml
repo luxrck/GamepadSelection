@@ -1,0 +1,6 @@
+name: Gamepad Selection (for Healers)
+author: Sgr A*
+description: |-
+  Using y/b/a/x and digipad up/right/down/left buttons to directly select party member no.1-8.
+
+  [!!!]: Should use the default ClassJob sort order in game settings.

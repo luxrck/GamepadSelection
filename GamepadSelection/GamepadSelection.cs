@@ -9,7 +9,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 
-namespace Gi
+namespace GamepadSelection
 {
     public class UseActionArgs {
         public IntPtr actionManager;
@@ -29,10 +29,18 @@ namespace Gi
             {"down", (ushort)GamepadButtons.DpadDown},
             {"left", (ushort)GamepadButtons.DpadLeft},
             {"right", (ushort)GamepadButtons.DpadRight},
+
+            // Xobx
             {"y", (ushort)GamepadButtons.North},
             {"a", (ushort)GamepadButtons.South},
             {"x", (ushort)GamepadButtons.West},
-            {"b", (ushort)GamepadButtons.East}
+            {"b", (ushort)GamepadButtons.East},
+
+            // Direction
+            {"n", (ushort)GamepadButtons.North},
+            {"s", (ushort)GamepadButtons.South},
+            {"w", (ushort)GamepadButtons.West},
+            {"e", (ushort)GamepadButtons.East},
         };
 
         private Dictionary<uint, string> actions;
@@ -58,7 +66,9 @@ namespace Gi
             // this.buddyList = buddyList;
             this.gsAction = new UseActionArgs();
 
-            this.config.UpdateActionsInMonitor += this.UpdateActionsInMonitor;
+            this.config.UpdateActionsInMonitor += (actions) => {
+                this.actions = actions;
+            };
 
             var Signature = "E8 ?? ?? ?? ?? EB 64 B1 01";
             var useAction = (new SigScanner()).ScanText(Signature);
@@ -222,11 +232,11 @@ namespace Gi
                 }
             }
 
-            t = t.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
-            h = h.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
-            m = m.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
-            pr = pr.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
-            mr = mr.OrderBy(x => x.Item1).ThenBy(x => x.Item3).ToList();
+            t = t.OrderBy(x => x.Item1).ThenByDescending(x => x.Item3).ToList();
+            h = h.OrderBy(x => x.Item1).ThenByDescending(x => x.Item3).ToList();
+            m = m.OrderBy(x => x.Item1).ThenByDescending(x => x.Item3).ToList();
+            pr = pr.OrderBy(x => x.Item1).ThenByDescending(x => x.Item3).ToList();
+            mr = mr.OrderBy(x => x.Item1).ThenByDescending(x => x.Item3).ToList();
             
             foreach(char a in order) {
                 switch (a)
@@ -245,11 +255,6 @@ namespace Gi
             }
 
             return me.Select(t => t.Item2).ToList();
-        }
-
-        public void UpdateActionsInMonitor(Dictionary<uint, string> actions)
-        {
-            this.actions = actions;
         }
 
         public void Dispose()

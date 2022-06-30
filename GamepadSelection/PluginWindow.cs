@@ -5,7 +5,7 @@ using ImGuiNET;
 using System;
 using System.Numerics;
 
-namespace Gi
+namespace GamepadSelection
 {
     public class PluginWindow : Window
     {
@@ -19,6 +19,10 @@ namespace Gi
             this.config = config;
             this.content = "";
             this.errorMessage = "";
+
+            this.config.UpdateContent += (content) => {
+                this.content = content;
+            };
 
             try {
                 this.content = JsonConvert.SerializeObject(config, Formatting.Indented);

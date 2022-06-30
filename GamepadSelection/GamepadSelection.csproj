@@ -13,15 +13,6 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Authors>Sgr A*</Authors>
-    <Company></Company>
-    <Version>0.0.0.1</Version>
-    <Description>Gamepad Selection Mode (for AST).</Description>
-    <Copyright></Copyright>
-    <PackageProjectUrl>https://github.com/luxrck/Gi</PackageProjectUrl>
-  </PropertyGroup>
-
-  <PropertyGroup>
     <DalamudLibPath>c:/luxrck/app/dalamud/addon/Hooks/dev/</DalamudLibPath>
   </PropertyGroup>
 

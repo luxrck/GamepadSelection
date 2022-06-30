@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Gi
+namespace GamepadSelection
 {
     [AttributeUsage(AttributeTargets.Method)]
     public class DoNotShowInHelpAttribute : Attribute

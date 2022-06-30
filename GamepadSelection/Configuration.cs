@@ -6,7 +6,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 
-namespace Gi
+namespace GamepadSelection
 {
     [JsonObject(MemberSerialization.OptIn)]
     public class Configuration : IPluginConfiguration
@@ -15,6 +15,9 @@ namespace Gi
 
         public delegate void UpdateActionsInMonitorDelegate(Dictionary<uint, string> actions);
         public UpdateActionsInMonitorDelegate UpdateActionsInMonitor;
+
+        public delegate void UpdateContentDelegate(string content);
+        public UpdateContentDelegate UpdateContent;
 
         // {
         //     "debug": false,
@@ -39,13 +42,15 @@ namespace Gi
         [JsonProperty]
         public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
         [JsonProperty]
-        public Dictionary<uint, string> rules {get; set; } = new Dictionary<uint, string>();
+        public Dictionary<string, string> rules {get; set; } = new Dictionary<string, string>();
         #endregion
 
         public Dictionary<string, uint> actions = new Dictionary<string, uint> {
-            {"均衡诊断", 24284},
+            {"诊断", 24284}, {"均衡诊断", 24284},   // 均衡诊断是24291, 但UseAction的参数ActionID却使用的是24284
             {"白牛清汁", 24303},
             {"灵橡清汁", 24296},
+            {"混合", 24317},
+            {"输血", 24305},
 
             {"神祝祷", 7432},
             {"神名", 3570},
@@ -95,11 +100,13 @@ namespace Gi
             try {
                 foreach(string s in this.actionsInMonitor) {
                     if (this.actions.ContainsKey(s)) {
-                        d.Add(this.actions[s], this.selectOrder);
+                        d.TryAdd(this.actions[s], this.selectOrder);
                     }
                 }
                 foreach(var i in this.rules) {
-                    d.Add(i.Key, i.Value);
+                    if (this.actions.ContainsKey(i.Key)) {
+                        d.TryAdd(this.actions[i.Key], i.Value);
+                    }
                 }
             } catch(Exception e) {
                 PluginLog.Log($"Exception: {e}");

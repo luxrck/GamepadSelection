@@ -1,13 +1,12 @@
 ﻿using Dalamud.Game.Command;
-using Gi.Attributes;
+using GamepadSelection.Attributes;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Collections.Generic;
-
 using static Dalamud.Game.Command.CommandInfo;
 
-namespace Gi
+namespace GamepadSelection
 {
     public class PluginCommandManager<THost> : IDisposable
     {
