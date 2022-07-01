@@ -1,6 +1,8 @@
 name: Gamepad Selection (for Healers)
+internal_name: GamepadSelection
 author: Sgr A*
+dalamud_api_level: 5
 description: |-
-  Using y/b/a/x and digipad up/right/down/left buttons to directly select party member no.1-8.
-
-  [!!!]: Should use the default ClassJob sort order in game settings.
+  Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select party member no.1-8.
+  
+  ❗: Should use the default **Job** sort order within same class.

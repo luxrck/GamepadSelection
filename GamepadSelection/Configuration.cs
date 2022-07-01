@@ -56,6 +56,8 @@ namespace GamepadSelection
             {"混合", 24317},
             {"输血", 24305},
 
+            {"再生", 137},
+            {"天赐祝福", 140},
             {"神祝祷", 7432},
             {"神名", 3570},
             {"水流幕", 25861},
@@ -82,6 +84,8 @@ namespace GamepadSelection
             {"Krasis", 24317},
             {"Haima", 24305},
 
+            {"Regen", 137},
+            {"Benediction", 140},
             {"Divine Benison", 7432},
             {"Tetragrammaton", 3570},
             {"Aquaveil", 25861},
@@ -128,7 +132,7 @@ namespace GamepadSelection
                 if (config is null)
                     config = new Configuration();
             } catch(Exception e) {
-                PluginLog.Log($"Exception: {e}");
+                PluginLog.Error($"Exception: {e}");
                 config = new Configuration();
             }
 
@@ -161,32 +165,35 @@ namespace GamepadSelection
                     }
                 }
             } catch(Exception e) {
-                PluginLog.Log($"Exception: {e}");
+                PluginLog.Error($"Exception: {e}");
             }
             return d;
         }
 
-        public bool Update(string content)
+        public bool Update(string content = "")
         {
-            if (content is null || content == "") return true;
-
             try {
-                var config = JsonConvert.DeserializeObject<Configuration>(content);
-                
-                if (config is null) return false;
-                
-                this.debug = config.debug;
-                this.actionsInMonitor = config.actionsInMonitor;
-                this.selectOrder = config.selectOrder;
-                this.partyMemeberSortOrder = config.partyMemeberSortOrder;
-                this.rules = config.rules;
+                if (content is null || content == "") {
+                    content = JsonConvert.SerializeObject(this, Formatting.Indented);
+                    this.UpdateContent(content);
+                } else {
+                    var config = JsonConvert.DeserializeObject<Configuration>(content);
+                    
+                    if (config is null) return false;
+                    
+                    this.debug = config.debug;
+                    this.actionsInMonitor = config.actionsInMonitor;
+                    this.selectOrder = config.selectOrder;
+                    this.partyMemeberSortOrder = config.partyMemeberSortOrder;
+                    this.rules = config.rules;
+                }
                 
                 var actions = this.GetActionsInMonitor();
                 this.UpdateActionsInMonitor(actions);
 
                 return true;
             } catch(Exception e) {
-                PluginLog.Log($"Exception: {e}");
+                PluginLog.Error($"Exception: {e}");
                 
                 return false;
             }   
@@ -200,7 +207,7 @@ namespace GamepadSelection
                 content = JsonConvert.SerializeObject(this, Formatting.Indented);
                 File.WriteAllText(this.configFile, content);
             } catch(Exception e) {
-                PluginLog.Log($"Exception: {e}");
+                PluginLog.Error($"Exception: {e}");
             }
             return content;
         }

@@ -89,23 +89,22 @@ namespace GamepadSelection
             var pmap = this.GetSortedPartyMemberIDs();
         
             if (this.config.debug) {
-                PluginLog.Log($"ActionID: {actionID}, SavedActionID: {a.actionID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
+                PluginLog.Debug($"ActionID: {actionID}, SavedActionID: {a.actionID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
             }
-            // PluginLog.Log($"Me: {pmap[0]}, ClassJob: {this.clientState.LocalPlayer.ClassJob.Id} inParty: {inParty}");
+            // PluginLog.Debug($"Me: {pmap[0]}, ClassJob: {this.clientState.LocalPlayer.ClassJob.Id} inParty: {inParty}");
 
             if (this.inGamepadSelectionMode) {
                 try {
                     unsafe {
                         var ginput = (GamepadInput*)this.gamepad.GamepadInputAddress;
 
-                        // 1. Only use [up down left right y a x b]
-                        // 2. Resolve buttons priority
+                        // Only use [up down left right y a x b]
                         // 目前GSM只在lt/rt按下, 即激活十字热键栏预备施放技能时可用.
                         int buttons = (ginput->ButtonsPressed & 0x00ff);
                         // 1 0 1 0 Prev
                         // 1 1 0 0 Now
                         // 0 1 0 0 True Buttons
-                        // 如果上一次状态和本次相同, 我们不能判断到底是哪个按键触发了Action.
+                        // 如果上一次状态和本次相同, 不能判断到底是哪个按键触发了Action.
                         // 多个按键同时按下, 选择优先级高的按键
                         if (buttons != this.savedButtonsPressed)
                             buttons = (buttons ^ this.savedButtonsPressed) & buttons;
@@ -123,18 +122,16 @@ namespace GamepadSelection
                             a.targetedActorID = gsTargetedActorID;
                         }
                         
-                        if (this.config.debug) {
-                            PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
-                        }
+                        PluginLog.Debug($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
 
-                        // PluginLog.Log($"[Buddy] ID: {0}, Length: {this.buddyList.Length}, index: {gsTargetedActorIndex}");
+                        // PluginLog.Debug($"[Buddy] ID: {0}, Length: {this.buddyList.Length}, index: {gsTargetedActorIndex}");
                         // if (this.buddyList.Length > 0) {
                         //     var gsTargetedActorID = this.buddyList[gsTargetedActorIndex % this.buddyList.Length].ObjectId;
                         //     a.targetedActorID = gsTargetedActorID;
                         // }
                     }
                 } catch(Exception e) {
-                    PluginLog.Log($"Exception: {e}");
+                    PluginLog.Error($"Exception: {e}");
                 }
 
                 ret = this.useActionHook.Original(a.actionManager, a.actionType, a.actionID, a.targetedActorID, a.param, a.useType, a.pvp, a.a8);

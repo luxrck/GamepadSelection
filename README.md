@@ -1,10 +1,10 @@
 # GamepadSelection
-Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select party member no.1-8.
+Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party member no.1-8.
 
-❗: Should use the default ClassJob sort order in game settings.
+❗: Should use the default **Job** sort order within same class.
 
 ## Usage
-**Step 1**: Press a button to trigger an monitored action, like `Eukrasian Diagnosis`, not execute it.
+**Step 1**: Trigger an monitored action, like `Haima`, this not execute it.
 
 **Step 2**: Press a button to select a party member and execute that action to the target immediately.
 

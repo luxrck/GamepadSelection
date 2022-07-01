@@ -6,12 +6,15 @@ using Dalamud.Game.Command;
 using Dalamud.Game.Gui;
 using Dalamud.Game.Text;
 using Dalamud.Interface.Windowing;
+using Dalamud.Logging;
 using Dalamud.Plugin;
 using GamepadSelection.Attributes;
 using Newtonsoft.Json;
 using System;
 using System.Linq;
-using Dalamud.Logging;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace GamepadSelection
 {
@@ -75,7 +78,7 @@ namespace GamepadSelection
 /gi remove <action> → Remove specific monitored <action>.
 
 <action>        Action name (in string).
-<selectOrder>   The order for party member selection (only accepted Digipad and y/b/a/x buttons).
+<selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons).
    Xbox |   PS
     y   |   △   |   n:North
     b   |   ○   |   e:East
@@ -86,7 +89,9 @@ namespace GamepadSelection
             if (args is null || args == "") {
                 this.window.Toggle();
             } else {
-                var argv = args.Trim().Split(" ").Where(a => a != "").ToList();
+                // add "Celestial Intersection" 'y b a x'
+                // add Haima default
+                var argv = args.Trim().Split(" ", 2).Where(a => a != "").ToList();
                 switch(argv[0])
                 {
                     case "list":
@@ -100,17 +105,26 @@ namespace GamepadSelection
                         break;
                     case "add":
                         try {
-                            var action = argv[1];
-                            if (argv.Count > 2) {
-                                this.config.rules.TryAdd(action, argv[2]);
+                            var actionkv = argv[1].Trim();
+                            var pattern = new Regex(@"[\""\']?\s*(?<action>[\w\s]+\w)\s*[\""\']?(\s+[\""\']?\s*(?<order>[\w\s]+\w)\s*[\""\']?)?",
+                                                    RegexOptions.Compiled);
+                            
+                            var match = pattern.Match(actionkv);
+
+                            var action = match.Groups.ContainsKey("action") ? match.Groups["action"].ToString() : "";
+                            var order = match.Groups.ContainsKey("order") ? match.Groups["order"].ToString() : "";
+
+                            if (order != "") {
+                                this.config.rules.TryAdd(action, order);
                             } else {
                                 if (!this.config.actionsInMonitor.Contains(action)) {
                                     this.config.actionsInMonitor.Add(action);
                                 }
                             }
                             this.Echo($"Add action: {action} ... [ok]");
-                        } catch {
+                        } catch(Exception e) {
                             this.chat.PrintError($"Add action failed.");
+                            PluginLog.Error($"Exception: {e}");
                         }
                         break;
                     case "remove":
@@ -119,8 +133,9 @@ namespace GamepadSelection
                             this.config.actionsInMonitor.Remove(action);
                             this.config.rules.Remove(action);
                             this.Echo($"Remove action: {action} ... [ok]");
-                        } catch {
+                        } catch(Exception e) {
                             this.chat.PrintError($"Remove action failed.");
+                            PluginLog.Error($"Exception: {e}");
                         }
                         break;
                     default:
@@ -128,10 +143,9 @@ namespace GamepadSelection
                 }
 
                 try {
-                    var content = JsonConvert.SerializeObject(this.config, Formatting.Indented);
-                    this.config.UpdateContent(content);
+                    this.config.Update();
                 } catch(Exception e) {
-                    PluginLog.Log($"Exception: {e}");
+                    PluginLog.Error($"Exception: {e}");
                 }
                 this.chat.UpdateQueue();
             }

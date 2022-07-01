@@ -3,6 +3,7 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0-windows</TargetFramework>
+    <Version>0.1.0</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <Platforms>x64</Platforms>
     <Nullable>enable</Nullable>
@@ -13,7 +14,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <DalamudLibPath>c:/luxrck/app/dalamud/addon/Hooks/dev/</DalamudLibPath>
+    <DalamudLibPath>C:\luxrck\app\dalamud\addon\Hooks\dev</DalamudLibPath>
   </PropertyGroup>
 
   <ItemGroup>

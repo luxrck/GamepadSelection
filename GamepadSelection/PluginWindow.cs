@@ -5,6 +5,7 @@ using ImGuiNET;
 using System;
 using System.Numerics;
 
+
 namespace GamepadSelection
 {
     public class PluginWindow : Window
@@ -32,11 +33,11 @@ namespace GamepadSelection
                 //     this.font = fonts.AddFontFromFileTTF(this.config.fontFile, 24.0f, &fc, fonts.GetGlyphRangesDefault());
                 //     fonts.Build();
                 //     // this.font = null;
-                //     // PluginLog.Log($"Font.FileNmame: {this.config.fontFile}");
-                //     PluginLog.Log($"Font IsLoaded?: {this.font.Value.IsLoaded()} {this.config.fontFile}");
+                //     // PluginLog.Debug($"Font.FileNmame: {this.config.fontFile}");
+                //     PluginLog.Debug($"Font IsLoaded?: {this.font.Value.IsLoaded()} {this.config.fontFile}");
                 // }
             } catch(Exception e) {
-                PluginLog.Log($"Exception: {e}");
+                PluginLog.Error($"Exception: {e}");
                 // this.font = null;
             }
 
@@ -98,7 +99,7 @@ namespace GamepadSelection
 
         private bool Save() {
             if (this.config.debug) {
-                PluginLog.Log($"Update config: {this.content}");
+                PluginLog.Debug($"Update config: {this.content}");
             }
             if (this.config.Update(this.content)) {
                 this.config.Save();
