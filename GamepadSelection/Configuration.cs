@@ -42,8 +42,8 @@ namespace GamepadSelection
         // };
         [JsonProperty]
         public string selectOrder {get; set; } = "y b a x right down up left";
-        [JsonProperty]
-        public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
+        // [JsonProperty]
+        // public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
         [JsonProperty]
         public Dictionary<string, string> rules {get; set; } = new Dictionary<string, string>();
         #endregion
@@ -184,7 +184,6 @@ namespace GamepadSelection
                     this.debug = config.debug;
                     this.actionsInMonitor = config.actionsInMonitor;
                     this.selectOrder = config.selectOrder;
-                    this.partyMemeberSortOrder = config.partyMemeberSortOrder;
                     this.rules = config.rules;
                 }
                 

@@ -16,12 +16,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
+using FFXIVClientStructs.FFXIV.Client.UI;
+
 namespace GamepadSelection
 {
     public class Plugin : IDalamudPlugin
     {
         internal readonly DalamudPluginInterface pluginInterface;
         internal readonly ChatGui chat;
+        internal readonly GameGui game;
         internal readonly ClientState clientState;
 
         internal readonly PluginCommandManager<Plugin> commandManager;
@@ -40,6 +43,7 @@ namespace GamepadSelection
             DalamudPluginInterface pi,
             CommandManager commands,
             ChatGui chat,
+            GameGui game,
             ClientState clientState,
             GamepadState gamepad,
             PartyList partyList,
@@ -47,6 +51,7 @@ namespace GamepadSelection
         {
             this.pluginInterface = pi;
             this.chat = chat;
+            this.game = game;
             this.clientState = clientState;
             this.partyList = partyList;
             this.buddyList = buddyList;
@@ -86,6 +91,11 @@ namespace GamepadSelection
     x   |   □   |   w:West")]
         public void CommandGi(string command, string args)
         {
+            unsafe {
+                var me = this.clientState.LocalPlayer;
+                this.Echo("{" + $"\"{me.TargetObject.Name.ToString()}\", {me.TargetObject.ObjectId}" + "}");
+            }
+            return;
             if (args is null || args == "") {
                 this.window.Toggle();
             } else {
