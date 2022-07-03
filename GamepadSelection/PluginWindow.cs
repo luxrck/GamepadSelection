@@ -10,36 +10,13 @@ namespace GamepadSelection
 {
     public class PluginWindow : Window
     {
-        private Configuration config;
-        private string content;
+        private Configuration Config = Plugin.Config;
         private string errorMessage;
         // private ImFontPtr? font;
 
-        public PluginWindow(Configuration config) : base("Gi Settings")
+        public PluginWindow() : base("Gi Settings")
         {
-            this.config = config;
-            this.content = "";
             this.errorMessage = "";
-
-            this.config.UpdateContent += (content) => {
-                this.content = content;
-            };
-
-            try {
-                this.content = JsonConvert.SerializeObject(config, Formatting.Indented);
-                // unsafe {
-                //     var fonts = ImGui.GetIO().Fonts;
-                //     ImFontConfig fc;
-                //     this.font = fonts.AddFontFromFileTTF(this.config.fontFile, 24.0f, &fc, fonts.GetGlyphRangesDefault());
-                //     fonts.Build();
-                //     // this.font = null;
-                //     // PluginLog.Debug($"Font.FileNmame: {this.config.fontFile}");
-                //     PluginLog.Debug($"Font IsLoaded?: {this.font.Value.IsLoaded()} {this.config.fontFile}");
-                // }
-            } catch(Exception e) {
-                PluginLog.Error($"Exception: {e}");
-                // this.font = null;
-            }
 
             IsOpen = false;
             Size = new Vector2(800, 600);
@@ -58,8 +35,9 @@ namespace GamepadSelection
 
             ImGui.SetNextItemWidth(-1);
             ImGui.SetNextWindowSizeConstraints(new Vector2(800, 600), new Vector2(float.MaxValue, float.MaxValue));
+
             ImGui.InputTextMultiline("",
-                                     ref this.content,
+                                     ref Config.content,
                                      1000,
                                      new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 100),
                                      ImGuiInputTextFlags.AllowTabInput);
@@ -98,15 +76,13 @@ namespace GamepadSelection
         }
 
         private bool Save() {
-            if (this.config.debug) {
-                PluginLog.Debug($"Update config: {this.content}");
-            }
-            if (this.config.Update(this.content)) {
-                this.config.Save();
+            PluginLog.Debug($"Update config: {Config.content}");
+            if (Config.Update(Config.content)) {
+                Config.Save();
                 return true;
             } else {
                 try {
-                    JsonConvert.DeserializeObject<Configuration>(this.content);
+                    JsonConvert.DeserializeObject<Configuration>(Config.content);
                 } catch(JsonReaderException e) {
                     this.errorMessage = e.Message;
                     ImGui.OpenPopup("Error");

@@ -1,5 +1,6 @@
 using Dalamud.Game;
 using Dalamud.Game.ClientState;
+using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Game.ClientState.Party;
 using Dalamud.Game.ClientState.Buddy;
@@ -8,6 +9,7 @@ using Dalamud.Logging;
 using Dalamud.Hooking;
 using System;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
 // using FFXIVClientStructs.FFXIV.Client.Game;
@@ -60,31 +62,23 @@ namespace GamepadSelection
         private int savedButtonsPressed;
         private UseActionArgs gsAction;
 
-        private ClientState clientState;
-        private GamepadState gamepad;
-        private PartyList partyList;
-        private GameGui game;
-        private Configuration config;
-        // private BuddyList buddyList;
+        private Configuration Config = Plugin.Config;
+        private GamepadState GamepadState = Plugin.GamepadState;
+        private PartyList PartyList = Plugin.PartyList;
+        private GameGui GameGui = Plugin.GameGui;
+        private ClientState ClientState = Plugin.ClientState;
+        private ObjectTable Objects = Plugin.Objects;
 
-        // public GamepadSelection(ClientState clientState, GamepadState gamepad, PartyList partyList, BuddyList buddyList, Configuration config) {
-        public GamepadSelection(Plugin p) {
-            this.clientState = p.clientState;
-            this.gamepad = p.gamepad;
-            this.partyList = p.partyList;
-            this.game = p.game;
-            this.config = p.config;
-
-            this.actions = p.config.GetActionsInMonitor();
-            // this.buddyList = buddyList;
+        public GamepadSelection() {
+            this.actions = Plugin.Config.GetActionsInMonitor();
             this.gsAction = new UseActionArgs();
 
-            this.config.UpdateActionsInMonitor += (actions) => {
+            Plugin.Config.UpdateActionsInMonitor += (actions) => {
                 this.actions = actions;
             };
 
             var Signature = "E8 ?? ?? ?? ?? EB 64 B1 01";
-            var useAction = (new SigScanner()).ScanText(Signature);
+            var useAction = Plugin.SigScanner.ScanText(Signature);
             this.useActionHook = new Hook<UseActionDelegate>(useAction, this.UseActionDetour);
 
             this.useActionHook.Enable();
@@ -96,19 +90,15 @@ namespace GamepadSelection
         {
             byte ret = 0;
             var a = this.gsAction;
-            bool inParty = this.partyList.Length > 0 || this.config.debug;  // <---
-            // bool inParty = true;
             var pmap = this.GetSortedPartyMembers();
+            bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
         
-            if (this.config.debug)
-                PluginLog.Log($"ActionID: {actionID}, SavedActionID: {a.actionID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
-
-            // PluginLog.Debug($"Me: {pmap[0]}, ClassJob: {this.clientState.LocalPlayer.ClassJob.Id} inParty: {inParty}");
+            PluginLog.Debug($"ActionID: {actionID}, SavedActionID: {a.actionID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
 
             if (this.inGamepadSelectionMode) {
                 try {
                     unsafe {
-                        var ginput = (GamepadInput*)this.gamepad.GamepadInputAddress;
+                        var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
 
                         // Only use [up down left right y a x b]
                         // 目前GSM只在lt/rt按下, 即激活十字热键栏预备施放技能时可用.
@@ -134,14 +124,7 @@ namespace GamepadSelection
                             a.targetedActorID = gsTargetedActorID;
                         }
                         
-                        if (this.config.debug)
-                            PluginLog.Log($"[Party] ID: {this.partyList.PartyId}, Length: {this.partyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
-
-                        // PluginLog.Debug($"[Buddy] ID: {0}, Length: {this.buddyList.Length}, index: {gsTargetedActorIndex}");
-                        // if (this.buddyList.Length > 0) {
-                        //     var gsTargetedActorID = this.buddyList[gsTargetedActorIndex % this.buddyList.Length].ObjectId;
-                        //     a.targetedActorID = gsTargetedActorID;
-                        // }
+                        PluginLog.Debug($"[Party] ID: {PartyList.PartyId}, Length: {PartyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
                     }
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");
@@ -154,8 +137,8 @@ namespace GamepadSelection
             } else {
                 // Cast normally if:
                 //  1. We are not in party
-                //  2. Action not in monitor
-                //  3. We already target a party member
+                //  2. We already target a party member
+                //  3. Action not in monitor
                 if (!inParty || !this.actions.ContainsKey(actionID) || pmap.Any(x => x.ID == (uint)targetedActorID)) {
                     ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
                 } else {
@@ -173,7 +156,7 @@ namespace GamepadSelection
             }
         
             unsafe {
-                var ginput = (GamepadInput*)this.gamepad.GamepadInputAddress;
+                var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                 this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0x00ffu);
             }
 
@@ -184,13 +167,13 @@ namespace GamepadSelection
         {
             try {
                 unsafe {
-                    var addonPartyList = (AddonPartyList*)this.game.GetAddonByName("_PartyList", 1);
+                    var addonPartyList = (AddonPartyList*)GameGui.GetAddonByName("_PartyList", 1);
                     if (addonPartyList is null)
                         return this.GetDefaultSortedPartyMembers(order);
-                
+
                     var pmap = new Dictionary<string, PartyMember>();
 
-                    foreach (PartyMember p in this.partyList) {
+                    foreach (PartyMember p in PartyList) {
                         var name = p.Name.ToString();
                         pmap.Add(name, p);
                     }
@@ -199,10 +182,10 @@ namespace GamepadSelection
                     uint selfJobID = 0;
                     string selfName = "";
                     
-                    if (this.clientState.LocalPlayer is not null) {
-                        selfID = this.clientState.LocalPlayer.ObjectId;
-                        selfJobID = this.clientState.LocalPlayer.ClassJob.Id;
-                        selfName = this.clientState.LocalPlayer.Name.ToString();
+                    if (ClientState.LocalPlayer is not null) {
+                        selfID = ClientState.LocalPlayer.ObjectId;
+                        selfJobID = ClientState.LocalPlayer.ClassJob.Id;
+                        selfName = ClientState.LocalPlayer.Name.ToString();
                     }
 
                     var me = new List<Member>() {
@@ -212,15 +195,30 @@ namespace GamepadSelection
                     for (var i = 1; i < addonPartyList->MemberCount; i++) {
                         // 90级 玩家2
                         // Lv90 Player Two
-                        var name = addonPartyList->PartyMember[i].Name->NodeText.ToString()
-                                                                                .Split(" ", 2)
-                                                                                .Last()
-                                                                                .Trim();
+                        // 90级 [皇冠]玩家3
+                        // 过场动画中
+                        var name = addonPartyList->PartyMember[i].Name->NodeText.ToString();
+                        // remove non-visible special characters.
+                        name = Regex.Replace(name, @"[\x01-\x1F,\x7F]", "");
+                        name = name.Split(" ", 2).Last().Trim();
                         me.Add(new Member() {
                             Name = name,
-                            ID = pmap[name].ObjectId,
-                            JobID = pmap[name].ClassJob.Id,
+                            ID = pmap.ContainsKey(name) ? pmap[name].ObjectId : 0,
+                            JobID = pmap.ContainsKey(name) ? pmap[name].ClassJob.Id : 0,
                         });
+                    }
+
+                    var objectMap = new Dictionary<string, uint>();
+
+                    if (addonPartyList->TrustCount > 0) {
+                        foreach (var obj in Objects) {
+                            var name = obj.Name.ToString().Trim();
+                            
+                            if (String.IsNullOrEmpty(name)) continue;
+                            
+                            var id = obj.ObjectId;
+                            objectMap.TryAdd(name, id);
+                        }
                     }
 
                     for (var i = 0; i < addonPartyList->TrustCount; i++) {
@@ -230,7 +228,7 @@ namespace GamepadSelection
                                                                                 .Trim();
                         me.Add(new Member() {
                             Name = name,
-                            ID = TrustMembers.GetObjectIdByName(name),
+                            ID = objectMap.ContainsKey(name) ? objectMap[name] : 0,
                             JobID = 0,  // ignored
                         });
                     }
@@ -258,10 +256,10 @@ namespace GamepadSelection
             uint selfJobID = 0;
             string selfName = "";
             
-            if (this.clientState.LocalPlayer is not null) {
-                selfID = this.clientState.LocalPlayer.ObjectId;
-                selfJobID = this.clientState.LocalPlayer.ClassJob.Id;
-                selfName = this.clientState.LocalPlayer.Name.ToString();
+            if (ClientState.LocalPlayer is not null) {
+                selfID = ClientState.LocalPlayer.ObjectId;
+                selfJobID = ClientState.LocalPlayer.ClassJob.Id;
+                selfName = ClientState.LocalPlayer.Name.ToString();
             }
 
             var me = new List<Member>() {
@@ -274,7 +272,7 @@ namespace GamepadSelection
             var pr = new List<Member>();
             var mr = new List<Member>();
             
-            foreach (PartyMember p in this.partyList) {
+            foreach (PartyMember p in PartyList) {
                 var pid = p.ObjectId;
                 if (pid == selfID) continue;
                 

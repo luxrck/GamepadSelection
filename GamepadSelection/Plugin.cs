@@ -1,20 +1,24 @@
-﻿using Dalamud.Game.ClientState;
-using Dalamud.Game.ClientState.Party;
-using Dalamud.Game.ClientState.Buddy;
+﻿using Dalamud.Game;
+using Dalamud.Game.ClientState;
+using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Keys;
+using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.GamePad;
+using Dalamud.Game.ClientState.Party;
 using Dalamud.Game.Command;
 using Dalamud.Game.Gui;
 using Dalamud.Game.Text;
+using Dalamud.IoC;
 using Dalamud.Interface.Windowing;
 using Dalamud.Logging;
 using Dalamud.Plugin;
-using GamepadSelection.Attributes;
 using Newtonsoft.Json;
 using System;
 using System.Linq;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
+
+using GamepadSelection.Attributes;
 
 using FFXIVClientStructs.FFXIV.Client.UI;
 
@@ -22,58 +26,41 @@ namespace GamepadSelection
 {
     public class Plugin : IDalamudPlugin
     {
-        internal readonly DalamudPluginInterface pluginInterface;
-        internal readonly ChatGui chat;
-        internal readonly GameGui game;
-        internal readonly ClientState clientState;
-
-        internal readonly PluginCommandManager<Plugin> commandManager;
-        internal readonly Configuration config;
-        internal readonly PluginWindow window;
-        internal readonly WindowSystem windowSystem;
-
+        [PluginService] public static DalamudPluginInterface PluginInterface { get; private set; } = null!;
+        [PluginService] public static ChatGui Chat { get; private set; } = null!;
+        [PluginService] public static ClientState ClientState { get; private set; } = null!;
+        [PluginService] public static GameGui GameGui { get; private set; } = null!;
+        [PluginService] public static ObjectTable Objects { get; private set; } = null!;
+        [PluginService] public static SigScanner SigScanner { get; private set; } = null!;
+        [PluginService] public static PartyList PartyList { get; private set; } = null!;
+        [PluginService] public static GamepadState GamepadState { get; private set; } = null!;
+        
+        public static PluginCommandManager<Plugin> Commands { get; private set; }
+        public static Configuration Config { get; private set; }
+        
+        private PluginWindow Window { get; set; }
+        private WindowSystem WindowSystem { get; set; }
+        
         internal GamepadSelection GamepadSelection;
-        internal PartyList partyList;
-        internal BuddyList buddyList;
-        internal GamepadState gamepad;
-
+        
         public string Name => "Gamepad Selection (for Healers)";
-
+        
         public Plugin(
             DalamudPluginInterface pi,
-            CommandManager commands,
-            ChatGui chat,
-            GameGui game,
-            ClientState clientState,
-            GamepadState gamepad,
-            PartyList partyList,
-            BuddyList buddyList)
+            CommandManager commands)
         {
-            this.pluginInterface = pi;
-            this.chat = chat;
-            this.game = game;
-            this.clientState = clientState;
-            this.partyList = partyList;
-            this.buddyList = buddyList;
-            this.gamepad = gamepad;
-            // this.player = clientState.LocalPlayer;
-
-            // Get or create a configuration object
-            this.config = Configuration.Load(pi);
+            Config = Configuration.Load();
+            
+            // Load all of our commands
+            Commands = new PluginCommandManager<Plugin>(this, commands);
+            GamepadSelection = new GamepadSelection();
             
             // Initialize the UI
-            this.window = new PluginWindow(config);
-            this.windowSystem = new WindowSystem(this.Name);
-            this.windowSystem.AddWindow(this.window);
+            Window = new PluginWindow();
+            WindowSystem = new WindowSystem(Name);
+            WindowSystem.AddWindow(Window);
             
-            this.pluginInterface.UiBuilder.Draw += this.windowSystem.Draw;
-
-            // Load all of our commands
-            this.commandManager = new PluginCommandManager<Plugin>(this, commands);
-            
-
-            // this.GamepadSelection = new GamepadSelection(this.clientState, this.gamepad, this.partyList, this.buddyList, this.config);
-            this.GamepadSelection = new GamepadSelection(this);
+            PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
         }
         
         [Command("/gi")]
@@ -91,13 +78,8 @@ namespace GamepadSelection
     x   |   □   |   w:West")]
         public void CommandGi(string command, string args)
         {
-            unsafe {
-                var me = this.clientState.LocalPlayer;
-                this.Echo("{" + $"\"{me.TargetObject.Name.ToString()}\", {me.TargetObject.ObjectId}" + "}");
-            }
-            return;
             if (args is null || args == "") {
-                this.window.Toggle();
+                Window.Toggle();
             } else {
                 // add "Celestial Intersection" 'y b a x'
                 // add Haima default
@@ -106,10 +88,10 @@ namespace GamepadSelection
                 {
                     case "list":
                         this.Echo("[Actions in Monitor]");
-                        foreach(string a in this.config.actionsInMonitor) {
+                        foreach(string a in Config.actionsInMonitor) {
                             this.Echo($"{a} : default");
                         }
-                        foreach(var a in this.config.rules) {
+                        foreach(var a in Config.rules) {
                             this.Echo($"{a.Key} : {a.Value}");
                         }
                         break;
@@ -125,26 +107,26 @@ namespace GamepadSelection
                             var order = match.Groups.ContainsKey("order") ? match.Groups["order"].ToString() : "";
 
                             if (order != "") {
-                                this.config.rules.TryAdd(action, order);
+                                Config.rules.TryAdd(action, order);
                             } else {
-                                if (!this.config.actionsInMonitor.Contains(action)) {
-                                    this.config.actionsInMonitor.Add(action);
+                                if (!Config.actionsInMonitor.Contains(action)) {
+                                    Config.actionsInMonitor.Add(action);
                                 }
                             }
                             this.Echo($"Add action: {action} ... [ok]");
                         } catch(Exception e) {
-                            this.chat.PrintError($"Add action failed.");
+                            Chat.PrintError($"Add action failed.");
                             PluginLog.Error($"Exception: {e}");
                         }
                         break;
                     case "remove":
                         try {
                             var action = argv[1];
-                            this.config.actionsInMonitor.Remove(action);
-                            this.config.rules.Remove(action);
+                            Config.actionsInMonitor.Remove(action);
+                            Config.rules.Remove(action);
                             this.Echo($"Remove action: {action} ... [ok]");
                         } catch(Exception e) {
-                            this.chat.PrintError($"Remove action failed.");
+                            Chat.PrintError($"Remove action failed.");
                             PluginLog.Error($"Exception: {e}");
                         }
                         break;
@@ -153,24 +135,24 @@ namespace GamepadSelection
                 }
 
                 try {
-                    this.config.Update();
+                    Config.Update();
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");
                 }
-                this.chat.UpdateQueue();
+                Chat.UpdateQueue();
             }
         }
 
         public void Echo(string s)
         {
-            this.chat.PrintChat(new XivChatEntry() {
+            Chat.PrintChat(new XivChatEntry() {
                 Message = s,
                 Type = XivChatType.Debug,
             });
         }
 
         public void Error(string s) {
-            this.chat.PrintError(s);
+            Chat.PrintError(s);
         }
 
         #region IDisposable Support
@@ -178,13 +160,13 @@ namespace GamepadSelection
         {
             if (!disposing) return;
 
-            this.commandManager.Dispose();
-            this.GamepadSelection.Dispose();
+            Commands.Dispose();
+            GamepadSelection.Dispose();
 
-            this.config.Save();
+            Config.Save();
 
-            this.pluginInterface.UiBuilder.Draw -= this.windowSystem.Draw;
-            this.windowSystem.RemoveAllWindows();
+            PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
+            WindowSystem.RemoveAllWindows();
         }
 
         public void Dispose()

@@ -16,8 +16,8 @@ namespace GamepadSelection
         public delegate void UpdateActionsInMonitorDelegate(Dictionary<uint, string> actions);
         public UpdateActionsInMonitorDelegate UpdateActionsInMonitor;
 
-        public delegate void UpdateContentDelegate(string content);
-        public UpdateContentDelegate UpdateContent;
+        // public delegate void UpdateContentDelegate(string content);
+        // public UpdateContentDelegate UpdateContent;
 
         // {
         //     "debug": false,
@@ -34,14 +34,14 @@ namespace GamepadSelection
 
         #region Saved configuration values
         [JsonProperty]
-        public bool debug {get; set; } = false;
+        public bool alwaysInParty {get; set; } = false;
         [JsonProperty]
         public List<string> actionsInMonitor {get; set; } = new List<string>();
         // public List<string> actionsInMonitor {get; set; } = new List<string>() {
             // "均衡诊断", "白牛清汁", "灵橡清汁", "出卡"
         // };
         [JsonProperty]
-        public string selectOrder {get; set; } = "y b a x right down up left";
+        public string selectOrder {get; set; } = "y b a x up right down left";
         // [JsonProperty]
         // public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
         [JsonProperty]
@@ -106,37 +106,45 @@ namespace GamepadSelection
             {"Protraction", 25867},
         };
 
-        private DalamudPluginInterface pluginInterface;
-        private DirectoryInfo root;
+        internal DirectoryInfo root;
         internal string configFile;
         internal string fontFile;
         internal string assetFile;
 
-        private static void Initialize(Configuration config, DalamudPluginInterface pi) {
-            config.pluginInterface = pi;
-            config.root = pi.ConfigDirectory;
-            var cd = config.root.ToString();
-            config.configFile = cd + $"/{pi.ConfigFile.Name}";
-            config.fontFile = cd + "/Font.otf";
-            config.assetFile = cd + "/Actions.json";
+        internal string content;
+
+        public Configuration() {
+            DalamudPluginInterface PluginInterface = Plugin.PluginInterface;
+            
+            this.root = PluginInterface.ConfigDirectory;
+            var cd = this.root.ToString();
+            this.configFile = cd + $"/{PluginInterface.ConfigFile.Name}";
+            this.fontFile = cd + "/Font.otf";
+            this.assetFile = cd + "/Actions.json";
+
+            try {
+                this.content = JsonConvert.SerializeObject(this, Formatting.Indented);
+            } catch(Exception e) {
+                PluginLog.Error($"Exception: {e}");
+            }
         }
         
-        public static Configuration Load(DalamudPluginInterface pi)
+        public static Configuration Load()
         {
             Configuration config = null;
             
             try {
-                var configFile = pi.ConfigDirectory.ToString() + $"/{pi.ConfigFile.Name}";
+                var configFile = Plugin.PluginInterface.ConfigDirectory.ToString() + $"/{Plugin.PluginInterface.ConfigFile.Name}";
                 var content = File.ReadAllText(configFile);
                 config = JsonConvert.DeserializeObject<Configuration>(content);
                 if (config is null)
                     config = new Configuration();
+                config.content = content;
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 config = new Configuration();
             }
 
-            Configuration.Initialize(config, pi);
             return config;
         }
 
@@ -174,17 +182,18 @@ namespace GamepadSelection
         {
             try {
                 if (content is null || content == "") {
-                    content = JsonConvert.SerializeObject(this, Formatting.Indented);
-                    this.UpdateContent(content);
+                    this.content = JsonConvert.SerializeObject(this, Formatting.Indented);
                 } else {
                     var config = JsonConvert.DeserializeObject<Configuration>(content);
                     
                     if (config is null) return false;
                     
-                    this.debug = config.debug;
+                    this.alwaysInParty = config.alwaysInParty;
                     this.actionsInMonitor = config.actionsInMonitor;
                     this.selectOrder = config.selectOrder;
                     this.rules = config.rules;
+
+                    this.content = content;
                 }
                 
                 var actions = this.GetActionsInMonitor();
@@ -203,8 +212,7 @@ namespace GamepadSelection
             var content = "";
             try {
 
-                content = JsonConvert.SerializeObject(this, Formatting.Indented);
-                File.WriteAllText(this.configFile, content);
+                File.WriteAllText(this.configFile, this.content);
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
             }

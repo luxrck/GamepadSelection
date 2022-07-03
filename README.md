@@ -15,7 +15,7 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 /gi remove <action> → Remove specific monitored <action>.
 
 <action>        Action name (in string).
-<selectOrder>   The order for party member selection (only accepted Digipad and y/b/a/x buttons).
+<selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons).
    Xbox |   PS
     y   |   △   |   n:North
     b   |   ○   |   e:East
@@ -26,15 +26,17 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 ## Config
 ```jsonc
 {
-  "debug": false,
+  // Always treating yourself as a member in a party list (even not exists).
+  "alwaysInParty": false,
+
   "actionsInMonitor": [
-    "Druochole",
+    "均衡诊断",
     "Haima"
   ],
 
   // Should restore to the default ClassJob sort order in game settings first in order to get the right mapping.
   // y → left <=> party member no.1 → no.8
-  "selectOrder": "y b a x right down up left",
+  "selectOrder": "y b a x up right down left",
 
   // Key: Action / ActionID
   // Val: SelectOrder string, will use `selectOrder` value in config if val is "" or "default".
