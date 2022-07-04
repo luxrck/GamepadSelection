@@ -2,5 +2,6 @@ name: Gamepad Selection (for Healers)
 internal_name: GamepadSelection
 author: Sgr A*
 dalamud_api_level: 5
+repo_url: https://github.com/luxrck/GamepadSelection.git
 description: |-
-  Using `y/b/a/x` and digipad `up/right/down/left` buttons to directly select party member no.1-8.
+  Using "y/b/a/x" and Dpad "up/right/down/left" buttons to directly select party member no.1 ~ no.8.
