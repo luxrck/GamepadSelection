@@ -56,13 +56,15 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 {
   // zh
   {"诊断", 24284},
-  // 均衡诊断的ID是24291, 但UseAction使用的参数是24284
+  // 均衡诊断是24291, 但UseAction的参数ActionID却使用的是24284
   {"均衡诊断", 24284},
   {"白牛清汁", 24303},
   {"灵橡清汁", 24296},
   {"混合", 24317},
   {"输血", 24305},
 
+  {"再生", 137},
+  {"天赐祝福", 140},
   {"神祝祷", 7432},
   {"神名", 3570},
   {"水流幕", 25861},
@@ -71,25 +73,27 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
   {"先天禀赋", 3614},
   {"出卡", 17055},
   {"吉星相位", 3595},
-  {"星位合图", 8918},
+  {"星位合图", 3612},
   {"出王冠卡", 25869},
   {"天星交错", 16556},
-  {"擢升", 25873}
+  {"擢升", 25873},
 
   {"鼓舞激励之策", 185},
   {"生命活性法", 189},
   {"深谋远虑之策", 7434},
   {"以太契约", 7423},
-  {"生命回生法", 25867}
+  {"生命回生法", 25867},
 
   // en
-  {"Diagnosis", 24284}
-  {"Eukrasian Diagnosis", 24284}
+  {"Diagnosis", 24284},
+  {"Eukrasian Diagnosis", 24284},
   {"Taurochole", 24303},
   {"Druochole", 24296},
   {"Krasis", 24317},
   {"Haima", 24305},
 
+  {"Regen", 137},
+  {"Benediction", 140},
   {"Divine Benison", 7432},
   {"Tetragrammaton", 3570},
   {"Aquaveil", 25861},
@@ -98,7 +102,7 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
   {"Essential Dignity", 3614},
   {"Play", 17055},
   {"Aspected Benefic", 3595},
-  {"Synastry", 8918},
+  {"Synastry", 3612},
   {"Crown Play", 25869},
   {"Celestial Intersection", 16556},
   {"Exaltation", 25873},

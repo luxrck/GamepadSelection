@@ -20,12 +20,11 @@ namespace GamepadSelection
         // public UpdateContentDelegate UpdateContent;
 
         // {
-        //     "debug": false,
+        //     "alwaysInParty": false,
         //     "actionsInMonitor": [
         //          "均衡诊断", "神祝祷"
         //     ],
         //     "selectOrder": "y b a x right down up left",
-        //     "partyMemeberSortOrder": "thmr",
         //     "rules": {
         //         "均衡诊断": "y b a x right down up left",
         //         "17055": "y b a x up right down left",   // 出卡
