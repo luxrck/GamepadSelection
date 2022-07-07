@@ -13,18 +13,15 @@ namespace GamepadSelection
     {
         int IPluginConfiguration.Version { get; set; }
 
-        public delegate void UpdateActionsInMonitorDelegate(Dictionary<uint, string> actions);
-        public UpdateActionsInMonitorDelegate UpdateActionsInMonitor;
-
         // public delegate void UpdateContentDelegate(string content);
         // public UpdateContentDelegate UpdateContent;
 
         // {
         //     "alwaysInParty": false,
-        //     "actionsInMonitor": [
-        //          "均衡诊断", "神祝祷"
+        //     "gs": [
+        //          "均衡诊断"
         //     ],
-        //     "selectOrder": "y b a x right down up left",
+        //     "priority": "y b a x right down up left",
         //     "rules": {
         //         "均衡诊断": "y b a x right down up left",
         //         "17055": "y b a x up right down left",   // 出卡
@@ -33,35 +30,55 @@ namespace GamepadSelection
 
         #region Saved configuration values
         [JsonProperty]
-        public bool alwaysInParty {get; set; } = false;
+        public bool alwaysInParty { get; set; } = false;
         [JsonProperty]
-        public List<string> actionsInMonitor {get; set; } = new List<string>();
-        // public List<string> actionsInMonitor {get; set; } = new List<string>() {
-            // "均衡诊断", "白牛清汁", "灵橡清汁", "出卡"
+        public List<string> gtoff { get; set; } = new List<string>();
+        [JsonProperty]
+        public List<string> gs { get; set; } = new List<string>();
+        // public List<string> gs {get; set; } = new List<string>() {
+            // "均衡诊断", "白priority", "出卡"
         // };
         [JsonProperty]
-        public string selectOrder {get; set; } = "y b a x up right down left";
+        public string priority { get; set; } = "y b a x up right down left";
         // [JsonProperty]
         // public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
         [JsonProperty]
-        public Dictionary<string, string> rules {get; set; } = new Dictionary<string, string>();
+        public Dictionary<string, string> rules { get; set; } = new Dictionary<string, string>();
         #endregion
 
         public Dictionary<string, uint> actions = new Dictionary<string, uint> {
-            {"诊断", 24284},
-            {"均衡诊断", 24284},   // 均衡诊断是24291, 但UseAction的参数ActionID却使用的是24284
+            // SGE
+            {"均衡诊断", 24291},
             {"白牛清汁", 24303},
             {"灵橡清汁", 24296},
             {"混合", 24317},
             {"输血", 24305},
+            {"Diagnosis", 24284},
+            {"Eukrasian Diagnosis", 24291},
+            {"Taurochole", 24303},
+            {"Druochole", 24296},
+            {"Krasis", 24317},
+            {"Haima", 24305},
 
+            // WHM
             {"再生", 137},
             {"天赐祝福", 140},
             {"神祝祷", 7432},
             {"神名", 3570},
             {"水流幕", 25861},
             {"安慰之心", 16531},
+            {"庇护所", 3569},
+            {"礼仪之铃", 25862},
+            {"Regen", 137},
+            {"Benediction", 140},
+            {"Divine Benison", 7432},
+            {"Tetragrammaton", 3570},
+            {"Aquaveil", 25861},
+            {"Afflatus Solace", 16531},
+            {"Asylum", 3569},
+            {"Liturgy of the Bell", 25862},
 
+            // AST
             {"先天禀赋", 3614},
             {"出卡", 17055},
             {"吉星相位", 3595},
@@ -69,27 +86,7 @@ namespace GamepadSelection
             {"出王冠卡", 25869},
             {"天星交错", 16556},
             {"擢升", 25873},
-
-            {"鼓舞激励之策", 185},
-            {"生命活性法", 189},
-            {"深谋远虑之策", 7434},
-            {"以太契约", 7423},
-            {"生命回生法", 25867},
-
-            {"Diagnosis", 24284},
-            {"Eukrasian Diagnosis", 24284},
-            {"Taurochole", 24303},
-            {"Druochole", 24296},
-            {"Krasis", 24317},
-            {"Haima", 24305},
-
-            {"Regen", 137},
-            {"Benediction", 140},
-            {"Divine Benison", 7432},
-            {"Tetragrammaton", 3570},
-            {"Aquaveil", 25861},
-            {"Afflatus Solace", 16531},
-
+            {"地星", 7439},
             {"Essential Dignity", 3614},
             {"Play", 17055},
             {"Aspected Benefic", 3595},
@@ -98,6 +95,12 @@ namespace GamepadSelection
             {"Celestial Intersection", 16556},
             {"Exaltation", 25873},
 
+            // SCH
+            {"鼓舞激励之策", 185},
+            {"生命活性法", 189},
+            {"深谋远虑之策", 7434},
+            {"以太契约", 7423},
+            {"生命回生法", 25867},
             {"Adloquium", 185},
             {"Lustrate", 189},
             {"Excogitation", 7434},
@@ -111,6 +114,10 @@ namespace GamepadSelection
         internal string assetFile;
 
         internal string content;
+
+        private HashSet<uint> gsActions = new HashSet<uint>();
+        private HashSet<uint> gtoffActions = new HashSet<uint>();
+        private Dictionary<uint, string> userActions = new Dictionary<uint, string>();
 
         public Configuration() {
             DalamudPluginInterface PluginInterface = Plugin.PluginInterface;
@@ -144,37 +151,26 @@ namespace GamepadSelection
                 config = new Configuration();
             }
 
+            config.UpdateActions();
+
             return config;
         }
 
-        public Dictionary<uint, string> GetActionsInMonitor()
+        public bool ActionInMonitor(uint actionID) {
+            return IsGsAction(actionID) || IsGtoffAction(actionID) || IsUserAction(actionID);
+        }
+        public bool IsGsAction(uint actionID) { return this.gsActions.Contains(actionID); }
+        public bool IsGtoffAction(uint actionID) { return this.gtoffActions.Contains(actionID); }
+        public bool IsUserAction(uint actionID) { return this.userActions.ContainsKey(actionID); }
+
+        public string SelectOrder(uint actionID)
         {
-            var d = new Dictionary<uint, string>();
-            try {
-                foreach(string s in this.actionsInMonitor) {
-                    if (this.actions.ContainsKey(s)) {
-                        d.TryAdd(this.actions[s], this.selectOrder);
-                    }
-                }
-                foreach(var i in this.rules) {
-                    uint actionID = 0;
-                    if (this.actions.ContainsKey(i.Key)) {
-                        actionID = this.actions[i.Key];
-                    } else {
-                        try {
-                            actionID = UInt32.Parse(i.Key);
-                        } catch {}
-                    }
-                    
-                    if (actionID > 0) {
-                        var value = i.Value == "" || i.Value.ToLower() == "default" ? this.selectOrder : i.Value;
-                        d.TryAdd(actionID, value);
-                    }
-                }
-            } catch(Exception e) {
-                PluginLog.Error($"Exception: {e}");
+            if (IsGsAction(actionID)) {
+                return this.priority;
+            } else if (IsUserAction(actionID)) {
+                return this.userActions[actionID];
             }
-            return d;
+            return String.Empty;
         }
 
         public bool Update(string content = "")
@@ -188,17 +184,15 @@ namespace GamepadSelection
                     if (config is null) return false;
                     
                     this.alwaysInParty = config.alwaysInParty;
-                    this.actionsInMonitor = config.actionsInMonitor;
-                    this.selectOrder = config.selectOrder;
+                    this.gs = config.gs;
+                    this.gtoff = config.gtoff;
+                    this.priority = config.priority;
                     this.rules = config.rules;
 
                     this.content = content;
                 }
                 
-                var actions = this.GetActionsInMonitor();
-                this.UpdateActionsInMonitor(actions);
-
-                return true;
+                return this.UpdateActions();
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 
@@ -206,16 +200,59 @@ namespace GamepadSelection
             }   
         }
 
-        public string Save()
+        private bool UpdateActions()
         {
-            var content = "";
             try {
+                var gs = new HashSet<uint>();
+                foreach(string s in this.gs) {
+                    if (this.actions.ContainsKey(s)) {
+                        gs.Add(this.actions[s]);
+                    }
+                }
+                this.gsActions = gs;
 
+                var gtoff = new HashSet<uint>();
+                foreach(string s in this.gtoff) {
+                    if (this.actions.ContainsKey(s)) {
+                        gtoff.Add(this.actions[s]);
+                    }
+                }
+                this.gtoffActions = gtoff;
+
+                var ua = new Dictionary<uint, string>();
+                foreach(var i in this.rules) {
+                    uint actionID = 0;
+                    if (this.actions.ContainsKey(i.Key)) {
+                        actionID = this.actions[i.Key];
+                    } else {
+                        try {
+                            actionID = UInt32.Parse(i.Key);
+                        } catch {}
+                    }
+                    
+                    if (actionID > 0) {
+                        var value = i.Value == "" || i.Value.ToLower() == "default" ? this.priority : i.Value;
+                        ua.TryAdd(actionID, value);
+                    }
+                }
+                this.userActions = ua;
+            } catch(Exception e) {
+                PluginLog.Error($"Exception: {e}");
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool Save()
+        {
+            try {
                 File.WriteAllText(this.configFile, this.content);
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
+                return false;
             }
-            return content;
+            return true;
         }
     }
 }

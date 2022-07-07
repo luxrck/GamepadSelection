@@ -34,17 +34,18 @@ namespace GamepadSelection
         [PluginService] public static SigScanner SigScanner { get; private set; } = null!;
         [PluginService] public static PartyList PartyList { get; private set; } = null!;
         [PluginService] public static GamepadState GamepadState { get; private set; } = null!;
+        [PluginService] public static TargetManager TargetManager { get; private set; } = null!;
         
         public static PluginCommandManager<Plugin> Commands { get; private set; }
         public static Configuration Config { get; private set; }
         
+        public string Name => "Gamepad Selection (for Healers)";
+        
         private PluginWindow Window { get; set; }
         private WindowSystem WindowSystem { get; set; }
         
-        internal GamepadSelection GamepadSelection;
-        
-        public string Name => "Gamepad Selection (for Healers)";
-        
+        private GamepadActionManager GamepadActionManager;
+
         public Plugin(
             DalamudPluginInterface pi,
             CommandManager commands)
@@ -53,7 +54,7 @@ namespace GamepadSelection
             
             // Load all of our commands
             Commands = new PluginCommandManager<Plugin>(this, commands);
-            GamepadSelection = new GamepadSelection();
+            GamepadActionManager = new GamepadActionManager();
             
             // Initialize the UI
             Window = new PluginWindow();
@@ -88,7 +89,10 @@ namespace GamepadSelection
                 {
                     case "list":
                         this.Echo("[Actions in Monitor]");
-                        foreach(string a in Config.actionsInMonitor) {
+                        foreach(string a in Config.gtoff) {
+                            this.Echo($"{a} : gtoff");
+                        }
+                        foreach(string a in Config.gs) {
                             this.Echo($"{a} : default");
                         }
                         foreach(var a in Config.rules) {
@@ -109,8 +113,8 @@ namespace GamepadSelection
                             if (order != "") {
                                 Config.rules.TryAdd(action, order);
                             } else {
-                                if (!Config.actionsInMonitor.Contains(action)) {
-                                    Config.actionsInMonitor.Add(action);
+                                if (!Config.gs.Contains(action)) {
+                                    Config.gs.Add(action);
                                 }
                             }
                             this.Echo($"Add action: {action} ... [ok]");
@@ -122,7 +126,7 @@ namespace GamepadSelection
                     case "remove":
                         try {
                             var action = argv[1];
-                            Config.actionsInMonitor.Remove(action);
+                            Config.gs.Remove(action);
                             Config.rules.Remove(action);
                             this.Echo($"Remove action: {action} ... [ok]");
                         } catch(Exception e) {
@@ -161,7 +165,7 @@ namespace GamepadSelection
             if (!disposing) return;
 
             Commands.Dispose();
-            GamepadSelection.Dispose();
+            GamepadActionManager.Dispose();
 
             Config.Save();
 

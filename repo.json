@@ -3,7 +3,7 @@
     "Author": "Sgr A*",
     "Name": "Gamepad Selection (for Healers)",
     "InternalName": "GamepadSelection",
-    "AssemblyVersion": "0.1.0",
+    "AssemblyVersion": "0.2.0",
     "Description": "Using \"y/b/a/x\" and Dpad \"up/right/down/left\" buttons to directly select party member no.1 ~ no.8.",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/luxrck/GamepadSelection.git",
