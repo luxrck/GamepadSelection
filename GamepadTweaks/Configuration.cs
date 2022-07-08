@@ -6,7 +6,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 
-namespace GamepadSelection
+namespace GamepadTweaks
 {
     [JsonObject(MemberSerialization.OptIn)]
     public class Configuration : IPluginConfiguration

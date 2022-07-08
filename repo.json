@@ -1,16 +1,16 @@
 [
   {
     "Author": "Sgr A*",
-    "Name": "Gamepad Selection (for Healers)",
-    "InternalName": "GamepadSelection",
+    "Name": "Gamepad Tweaks (for Healers)",
+    "InternalName": "GamepadTweaks",
     "AssemblyVersion": "0.2.0",
-    "Description": "Using \"y/b/a/x\" and Dpad \"up/right/down/left\" buttons to directly select party member no.1 ~ no.8.",
+    "Description": "Gamepad tweaks for ffxiv.\n\nInclude:\n1. <gtoff> like casting type support\n2. Gamepad Selection. which using \"y/b/a/x\" and Dpad \"up/right/down/left\" buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.",
     "ApplicableVersion": "any",
-    "RepoUrl": "https://github.com/luxrck/GamepadSelection.git",
+    "RepoUrl": "https://github.com/luxrck/GamepadTweaks.git",
     "DalamudApiLevel": 5,
     "LoadPriority": 0,
-    "DownloadLinkInstall": "https://github.com/luxrck/GamepadSelection/releases/latest/download/GamepadSelection.zip",
-    "DownloadLinkTesting": "https://github.com/luxrck/GamepadSelection/releases/latest/download/GamepadSelection.zip",
-    "DownloadLinkUpdate":  "https://github.com/luxrck/GamepadSelection/releases/latest/download/GamepadSelection.zip"
+    "DownloadLinkInstall": "https://github.com/luxrck/GamepadTweaks/releases/latest/download/GamepadTweaks.zip",
+    "DownloadLinkTesting": "https://github.com/luxrck/GamepadTweaks/releases/latest/download/GamepadTweaks.zip",
+    "DownloadLinkUpdate":  "https://github.com/luxrck/GamepadTweaks/releases/latest/download/GamepadTweaks.zip"
   }
 ]

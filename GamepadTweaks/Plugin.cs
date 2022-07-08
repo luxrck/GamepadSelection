@@ -18,11 +18,11 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-using GamepadSelection.Attributes;
+using GamepadTweaks.Attributes;
 
 using FFXIVClientStructs.FFXIV.Client.UI;
 
-namespace GamepadSelection
+namespace GamepadTweaks
 {
     public class Plugin : IDalamudPlugin
     {

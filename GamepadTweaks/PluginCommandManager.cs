@@ -1,12 +1,12 @@
 ﻿using Dalamud.Game.Command;
-using GamepadSelection.Attributes;
+using GamepadTweaks.Attributes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using static Dalamud.Game.Command.CommandInfo;
 
-namespace GamepadSelection
+namespace GamepadTweaks
 {
     public class PluginCommandManager<THost> : IDisposable
     {

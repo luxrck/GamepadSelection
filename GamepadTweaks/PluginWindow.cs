@@ -6,7 +6,7 @@ using System;
 using System.Numerics;
 
 
-namespace GamepadSelection
+namespace GamepadTweaks
 {
     public class PluginWindow : Window
     {

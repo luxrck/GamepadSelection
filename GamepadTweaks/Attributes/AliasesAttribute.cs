@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace GamepadSelection.Attributes
+namespace GamepadTweaks.Attributes
 {
     [AttributeUsage(AttributeTargets.Method)]
     public class AliasesAttribute : Attribute

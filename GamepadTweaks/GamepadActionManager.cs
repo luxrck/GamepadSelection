@@ -1,4 +1,4 @@
-using Dalamud.Game;
+﻿using Dalamud.Game;
 using Dalamud.Game.ClientState;
 using Dalamud.Game.ClientState.Buddy;
 using Dalamud.Game.ClientState.GamePad;
@@ -18,7 +18,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Graphics;
 using FFXIVClientStructs.FFXIV.Client.UI;
 
-namespace GamepadSelection
+namespace GamepadTweaks
 {
     public class UseActionArgs {
         public IntPtr actionManager;
@@ -142,7 +142,9 @@ namespace GamepadSelection
                             this.gsAction.targetedActorID = gsTargetedActorID;
                         }
 
-                        PluginLog.Debug($"[Party] ID: {PartyList.PartyId}, Length: {PartyList.Length}, index: {gsTargetedActorIndex}, btn: {Convert.ToString(buttons, 2)}, savedBtn: {Convert.ToString(this.savedButtonsPressed, 2)}, origBtn: {Convert.ToString((ginput->ButtonsPressed & 0x00ff), 2)}, reptBtn: {Convert.ToString((ginput->ButtonsRepeat & 0x00ff), 2)}, Action: {a.actionID} Target: {a.targetedActorID}");
+                        Func<int, string> _S = (x) => Convert.ToString(x, 2).PadLeft(8, '0');
+
+                        PluginLog.Debug($"[Party] ID: {PartyList.PartyId}, Length: {PartyList.Length}, index: {gsTargetedActorIndex}, btn: {_S(buttons)}, savedBtn: {_S(this.savedButtonsPressed)}, origBtn: {_S(ginput->ButtonsPressed & 0xff)}, reptBtn: {_S((ginput->ButtonsRepeat & 0xff))}, Action: {a.actionID} Target: {a.targetedActorID}");
                     }
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");

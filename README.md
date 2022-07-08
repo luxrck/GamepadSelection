@@ -1,13 +1,14 @@
-## Gamepad Selection
-Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party member no.1-8.
+## GamepadTweaks
+##### Gamepad Selection
+Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.
 
-**Step 1**: Trigger an monitored action, like `Haima`, this not execute it.
+**Step 1**: Trigger an monitored action, like `Haima`, entering gamepad selection mode (instead of execute it directly).
 
 **Step 2**: Press a button to select a party member and execute that action to the target immediately.
 
 ❗: Those button states are only captured **when CrossHotBar is activated (press LT/RT)**
 
-### gtoff
+##### gtoff
 Support and extend `<gtoff>` like casting type using gamepad. If we already target a GameObject (enemy, party member, etc), then it will use the position of the target (`/ac xx <t>`). Otherwise it acts just like `<gtoff>` macros (`/ac xx <gtoff>`).
 
 ### CLI
