@@ -3,7 +3,7 @@
     "Author": "Sgr A*",
     "Name": "Gamepad Tweaks (for Healers)",
     "InternalName": "GamepadTweaks",
-    "AssemblyVersion": "0.2.0",
+    "AssemblyVersion": "0.2.1",
     "Description": "Gamepad tweaks for ffxiv.\n\nInclude:\n1. <gtoff> like casting type support\n2. Gamepad Selection. which using \"y/b/a/x\" and Dpad \"up/right/down/left\" buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/luxrck/GamepadTweaks.git",
