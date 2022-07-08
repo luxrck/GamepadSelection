@@ -64,11 +64,12 @@ namespace GamepadTweaks
             PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
         }
         
-        [Command("/gi")]
+        [Command("/gt")]
         [HelpMessage(@"Open setting panel.
-/gi list → List actions and corresponding selection order.
-/gi add <action> [<selectOrder>] → Add specific <action> in monitor.
-/gi remove <action> → Remove specific monitored <action>.
+/gt on/off → Enable/Disable this plugin.
+/gt list → List actions and corresponding selection order.
+/gt add <action> [<selectOrder>] → Add specific <action> in monitor.
+/gt remove <action> → Remove specific monitored <action>.
 
 <action>        Action name (in string).
 <selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons).
@@ -87,6 +88,14 @@ namespace GamepadTweaks
                 var argv = args.Trim().Split(" ", 2).Where(a => a != "").ToList();
                 switch(argv[0])
                 {
+                    case "on":
+                        this.Echo("[GamepadTweaks] Enabled.");
+                        GamepadActionManager.Enable();
+                        break;
+                    case "off":
+                        this.Echo("[GamepadTweaks] Disabled.");
+                        GamepadActionManager.Disable();
+                        break;
                     case "list":
                         this.Echo("[Actions in Monitor]");
                         foreach(string a in Config.gtoff) {

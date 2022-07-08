@@ -14,14 +14,13 @@ namespace GamepadTweaks
         private string errorMessage;
         // private ImFontPtr? font;
 
-        public PluginWindow() : base("Gi Settings")
+        public PluginWindow() : base("Gamepad Tweaks Settings")
         {
             this.errorMessage = "";
 
             IsOpen = false;
             Size = new Vector2(800, 600);
             SizeCondition = ImGuiCond.FirstUseEver;
-            WindowName = "Gi Settings";
             Flags = ImGuiWindowFlags.NoCollapse;
         }
 

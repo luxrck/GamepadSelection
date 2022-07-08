@@ -11,13 +11,17 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 ##### gtoff
 Support and extend `<gtoff>` like casting type using gamepad. If we already target a GameObject (enemy, party member, etc), then it will use the position of the target (`/ac xx <t>`). Otherwise it acts just like `<gtoff>` macros (`/ac xx <gtoff>`).
 
+##### Targeting
+Auto targeting the nearest enemy when casting actions. Damage actions will ignore the **SoftTarget** now, only Buffs could take use of it.
+
 ### CLI
 
 ```
-/gi → Open setting panel.
-/gi list → List actions and corresponding selection order.
-/gi add <action> [<selectOrder>] → Add specific <action> in monitor.
-/gi remove <action> → Remove specific monitored <action>.
+/gt → Open setting panel.
+/gt on/off → Enable/Disable this plugin.
+/gt list → List actions and corresponding selection order.
+/gt add <action> [<selectOrder>] → Add specific <action> in monitor.
+/gt remove <action> → Remove specific monitored <action>.
 
 <action>        Action name (in string).
 <selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons).
@@ -33,6 +37,9 @@ Support and extend `<gtoff>` like casting type using gamepad. If we already targ
 {
   // Always treating yourself as a member in a party list (even not exists).
   "alwaysInParty": false,
+
+  // Auto targeting the nearest enemy when casting actions.
+  "autoTargeting": false,
 
   // Emulate <gtoff>
   // Casting direcly instead of entering ground targeting mode.

@@ -32,6 +32,8 @@ namespace GamepadTweaks
         [JsonProperty]
         public bool alwaysInParty { get; set; } = false;
         [JsonProperty]
+        public bool autoTargeting { get; set; } = false;
+        [JsonProperty]
         public List<string> gtoff { get; set; } = new List<string>();
         [JsonProperty]
         public List<string> gs { get; set; } = new List<string>();
@@ -156,22 +158,12 @@ namespace GamepadTweaks
             return config;
         }
 
-        public bool ActionInMonitor(uint actionID) {
-            return IsGsAction(actionID) || IsGtoffAction(actionID) || IsUserAction(actionID);
-        }
-        public bool IsGsAction(uint actionID) { return this.gsActions.Contains(actionID); }
-        public bool IsGtoffAction(uint actionID) { return this.gtoffActions.Contains(actionID); }
-        public bool IsUserAction(uint actionID) { return this.userActions.ContainsKey(actionID); }
+        public bool ActionInMonitor(uint actionID) => IsGsAction(actionID) || IsGtoffAction(actionID) || IsUserAction(actionID);
+        public bool IsGsAction(uint actionID) => this.gsActions.Contains(actionID);
+        public bool IsGtoffAction(uint actionID) => this.gtoffActions.Contains(actionID);
+        public bool IsUserAction(uint actionID) => this.userActions.ContainsKey(actionID);
 
-        public string SelectOrder(uint actionID)
-        {
-            if (IsGsAction(actionID)) {
-                return this.priority;
-            } else if (IsUserAction(actionID)) {
-                return this.userActions[actionID];
-            }
-            return String.Empty;
-        }
+        public string SelectOrder(uint actionID) => IsUserAction(actionID) ? this.userActions[actionID] : this.priority;
 
         public bool Update(string content = "")
         {
@@ -184,6 +176,7 @@ namespace GamepadTweaks
                     if (config is null) return false;
                     
                     this.alwaysInParty = config.alwaysInParty;
+                    this.autoTargeting = config.autoTargeting;
                     this.gs = config.gs;
                     this.gtoff = config.gtoff;
                     this.priority = config.priority;

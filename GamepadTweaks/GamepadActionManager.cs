@@ -3,6 +3,7 @@ using Dalamud.Game.ClientState;
 using Dalamud.Game.ClientState.Buddy;
 using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Game.ClientState.Objects;
+using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Party;
 using Dalamud.Game.Gui;
@@ -82,14 +83,14 @@ namespace GamepadTweaks
         }
 
         private Hook<UseActionDelegate> useActionHook;
-        private delegate byte UseActionDelegate(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8);
-        private byte UseActionDetour(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8)
+        private delegate bool UseActionDelegate(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8);
+        private bool UseActionDetour(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8)
         {
-            byte ret = 0;
-            var a = new UseActionArgs();
+            bool ret = false;
             var adjustedID = actionID;
             var pmap = this.GetSortedPartyMembers();
-            var target = TargetManager.SoftTarget ?? TargetManager.Target;
+            var target = TargetManager.Target ?? (Config.autoTargeting ? NearestTarget() : null);
+            var softTarget = TargetManager.SoftTarget;
             bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
 
             unsafe {
@@ -98,18 +99,8 @@ namespace GamepadTweaks
                     adjustedID = am->GetAdjustedActionId(actionID);
             }
 
-            a.actionManager = actionManager;
-            a.actionType = actionType;
-            a.actionID = actionID;
-            a.targetedActorID = targetedActorID;
-            a.param = param;
-            a.useType = useType;
-            a.pvp = pvp;
-            a.a8 = a8;
-
-            PluginLog.Debug($"ActionID: {actionID}, AdjustedID: {adjustedID}, TargetID: {targetedActorID}, inGSM: {this.inGamepadSelectionMode}");
-
             if (this.inGamepadSelectionMode) {
+                var a = this.gsAction;
                 try {
                     unsafe {
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
@@ -143,14 +134,12 @@ namespace GamepadTweaks
                         }
 
                         Func<int, string> _S = (x) => Convert.ToString(x, 2).PadLeft(8, '0');
-
-                        PluginLog.Debug($"[Party] ID: {PartyList.PartyId}, Length: {PartyList.Length}, index: {gsTargetedActorIndex}, btn: {_S(buttons)}, savedBtn: {_S(this.savedButtonsPressed)}, origBtn: {_S(ginput->ButtonsPressed & 0xff)}, reptBtn: {_S((ginput->ButtonsRepeat & 0xff))}, Action: {a.actionID} Target: {a.targetedActorID}");
+                        PluginLog.Debug($"[Party] ID: {PartyList.PartyId}, Length: {pmap.Count}, index: {gsTargetedActorIndex}, btn: {_S(buttons)}, savedBtn: {_S(this.savedButtonsPressed)}, origBtn: {_S(ginput->ButtonsPressed & 0xff)}, reptBtn: {_S((ginput->ButtonsRepeat & 0xff))}, Action: {a.actionID} Target: {a.targetedActorID}");
                     }
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");
                 }
 
-                a = this.gsAction;
                 ret = this.useActionHook.Original(a.actionManager, a.actionType, a.actionID, a.targetedActorID, a.param, a.useType, a.pvp, a.a8);
 
                 this.savedButtonsPressed = 0;
@@ -180,16 +169,36 @@ namespace GamepadTweaks
                     }
                 } else if (
                     !inParty ||
-                    target is not null && pmap.Any(x => x.ID == target.ObjectId) ||     // SoftTarget support.
+                    target is not null && pmap.Any(x => x.ID == target.ObjectId) ||
+                    softTarget is not null && pmap.Any(x => x.ID == softTarget.ObjectId) || // SoftTarget support.
                     !(Config.ActionInMonitor(actionID) || Config.ActionInMonitor(adjustedID))
                 ) {
                     // Cast normally if:
                     //  1. We are not in party
                     //  2. We already target a party member
                     //  3. Action not in monitor
+                    if (softTarget is not null)
+                        targetedActorID = softTarget.ObjectId;
                     ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+
+                    if (!ret) {
+                        if (target is not null)
+                            targetedActorID = target.ObjectId;
+                        ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+                    }
+
+                    var tgtID = target is not null ? target.ObjectId : 0;
+                    var softTgtID = softTarget is not null ? softTarget.ObjectId : 0;
+                    PluginLog.Debug($"ActionID: {actionID}, AdjustedID: {adjustedID}, TargetID: {tgtID}, SoftTargetID: {softTgtID}");
                 } else {
-                    this.gsAction = a;
+                    this.gsAction.actionManager = actionManager;
+                    this.gsAction.actionType = actionType;
+                    this.gsAction.actionID = actionID;
+                    this.gsAction.targetedActorID = targetedActorID;
+                    this.gsAction.param = param;
+                    this.gsAction.useType = useType;
+                    this.gsAction.pvp = pvp;
+                    this.gsAction.a8 = a8;
                     this.inGamepadSelectionMode = true;
                 }
             }
@@ -270,6 +279,7 @@ namespace GamepadTweaks
                             ID = objectMap.ContainsKey(name) ? objectMap[name] : 0,
                             JobID = 0,  // ignored
                         });
+                        var id = objectMap.ContainsKey(name) ? objectMap[name] : 0;
                     }
 
                     return me;
@@ -382,6 +392,51 @@ namespace GamepadTweaks
 
             return me.ToList();
         }
+
+        private GameObject? NearestTarget(BattleNpcSubKind type = BattleNpcSubKind.Enemy)
+        {
+            var me = ClientState.LocalPlayer;
+            
+            if (me is null)
+                return null;
+            
+            var pm = me.Position;
+            
+            GameObject o = null;
+            var md = Double.PositiveInfinity;
+            foreach (var x in Objects) {
+                if (!x.IsValid() ||
+                    x.ObjectKind != ObjectKind.BattleNpc ||
+                    x.SubKind != (byte)type ||
+                    x.ObjectId == me.ObjectId)
+                    continue;
+                if (((BattleNpc)x).CurrentHp <= 0) {
+                    continue;
+                }
+                var px = x.Position;
+                var d = Math.Pow(px.X - pm.X, 2) + Math.Pow(px.Y - pm.Y, 2) + Math.Pow(px.Z - pm.Z, 2);
+                if (d < md) {
+                    md = d;
+                    o = x;
+                }
+            }
+
+            // GameObject o = Objects.ToList().Min(x => {
+            //     if (x.ObjectId == me.ObjectId)
+            //         return Double.PositiveInfinity;
+            //     var px = x.Position;
+            //     return Math.Pow(px.X - pm.X, 2) + Math.Pow(px.Y - pm.Y, 2) + Math.Pow(px.Z - pm.Z, 2);
+            // });
+            if (o is not null) {
+                TargetManager.SetTarget(o);
+                PluginLog.Debug($"Nearest Target: {o.ObjectId} {o.Name.ToString()}, SubKind: {type}");
+            }
+
+            return o;
+        }
+
+        public void Enable() => this.useActionHook.Enable();
+        public void Disable() => this.useActionHook.Disable();
 
         public void Dispose()
         {
