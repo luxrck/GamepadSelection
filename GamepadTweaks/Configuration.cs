@@ -4,6 +4,7 @@ using Dalamud.Logging;
 using Newtonsoft.Json;
 using System;
 using System.IO;
+using System.Linq;
 using System.Collections.Generic;
 
 namespace GamepadTweaks
@@ -44,6 +45,8 @@ namespace GamepadTweaks
         public string priority { get; set; } = "y b a x up right down left";
         // [JsonProperty]
         // public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
+        [JsonProperty]
+        public List<string> combo { get; set; } = new List<string>();
         [JsonProperty]
         public Dictionary<string, string> rules { get; set; } = new Dictionary<string, string>();
         #endregion
@@ -89,6 +92,8 @@ namespace GamepadTweaks
             {"天星交错", 16556},
             {"擢升", 25873},
             {"地星", 7439},
+            {"小奥秘卡", 7443},
+            {"抽卡", 3590},
             {"Essential Dignity", 3614},
             {"Play", 17055},
             {"Aspected Benefic", 3595},
@@ -108,6 +113,12 @@ namespace GamepadTweaks
             {"Excogitation", 7434},
             {"Aetherpact", 7423},
             {"Protraction", 25867},
+
+            // WAR
+            {"重劈", 31},
+            {"凶残裂", 37},
+            {"暴风斩", 42},
+            {"暴风碎", 45},
         };
 
         internal DirectoryInfo root;
@@ -121,7 +132,10 @@ namespace GamepadTweaks
         private HashSet<uint> gtoffActions = new HashSet<uint>();
         private Dictionary<uint, string> userActions = new Dictionary<uint, string>();
 
-        public Configuration() {
+        private ComboManager comboManager;
+
+        public Configuration()
+        {
             DalamudPluginInterface PluginInterface = Plugin.PluginInterface;
             
             this.root = PluginInterface.ConfigDirectory;
@@ -131,7 +145,7 @@ namespace GamepadTweaks
             this.assetFile = cd + "/Actions.json";
 
             try {
-                this.content = JsonConvert.SerializeObject(this, Formatting.Indented);
+                this.Update();
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
             }
@@ -159,17 +173,32 @@ namespace GamepadTweaks
         }
 
         public bool ActionInMonitor(uint actionID) => IsGsAction(actionID) || IsGtoffAction(actionID) || IsUserAction(actionID);
-        public bool IsGsAction(uint actionID) => this.gsActions.Contains(actionID);
+        public bool IsGsAction(uint actionID) => this.gsActions.Contains(actionID) || IsUserAction(actionID);
         public bool IsGtoffAction(uint actionID) => this.gtoffActions.Contains(actionID);
         public bool IsUserAction(uint actionID) => this.userActions.ContainsKey(actionID);
+        public bool IsComboAction(uint actionID) => this.comboManager.Contains(actionID);
+        public bool IsComboGroup(uint actionID) => this.comboManager.ContainsGroup(actionID);
 
         public string SelectOrder(uint actionID) => IsUserAction(actionID) ? this.userActions[actionID] : this.priority;
+
+        public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.comboManager.Current(groupID, lastComboAction, comboTimer);
+        public bool UpdateComboState(uint actionID) => this.comboManager.StateUpdate(actionID);
 
         public bool Update(string content = "")
         {
             try {
                 if (content is null || content == "") {
-                    this.content = JsonConvert.SerializeObject(this, Formatting.Indented);
+                    using (var fs = File.Create(this.configFile))
+                    using (var sw = new StreamWriter(fs))
+                    using (var jw = new JsonTextWriter(sw) { 
+                        Formatting = Formatting.Indented, 
+                        Indentation = 1, 
+                        IndentChar = '\t'
+                    }) {
+                        (new JsonSerializer()).Serialize(jw, this);
+                    }
+
+                    this.content = File.ReadAllText(this.configFile);
                 } else {
                     var config = JsonConvert.DeserializeObject<Configuration>(content);
                     
@@ -180,6 +209,7 @@ namespace GamepadTweaks
                     this.gs = config.gs;
                     this.gtoff = config.gtoff;
                     this.priority = config.priority;
+                    this.combo = config.combo;
                     this.rules = config.rules;
 
                     this.content = content;
@@ -229,6 +259,15 @@ namespace GamepadTweaks
                     }
                 }
                 this.userActions = ua;
+
+                var cg = new Dictionary<uint, List<uint>>();
+                foreach (string s in this.combo) {
+                    var ss = s.Split(":");
+                    var comboActions = ss[0].Split("->").Where(a => a != "").Select(a => this.actions[a.Trim()]).ToList();
+                    var groupID = this.actions[ss[1].Trim()];
+                    cg.Add(groupID, comboActions);
+                }
+                this.comboManager = new ComboManager(cg);
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 return false;

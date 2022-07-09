@@ -8,11 +8,14 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 
 ❗: Those button states are only captured **when CrossHotBar is activated (press LT/RT)**
 
-##### gtoff
+##### Gtoff
 Support and extend `<gtoff>` like casting type using gamepad. If we already target a GameObject (enemy, party member, etc), then it will use the position of the target (`/ac xx <t>`). Otherwise it acts just like `<gtoff>` macros (`/ac xx <gtoff>`).
 
 ##### Targeting
-Auto targeting the nearest enemy when casting actions. Damage actions will ignore the **SoftTarget** now, only Buffs could take use of it.
+Auto targeting the nearest enemy (if not) when casting actions. Damage actions will ignore the **SoftTarget** now, only Buffs could take use of it.
+
+##### Combo
+Combo support like [XivComboPlugin](https://github.com/attickdoor/XIVComboPlugin.git), but could take use of our own tweaks.
 
 ### CLI
 
@@ -56,6 +59,12 @@ Auto targeting the nearest enemy when casting actions. Damage actions will ignor
   // Default select order for gs actions.
   // y → left <=> party member no.1 → no.8
   "priority": "y b a x up right down left",
+
+  // <combo chain> : <slot action>
+  "combo": [
+    "重劈 -> 凶残裂 -> 暴风斩 : 暴风斩",
+    "小奥秘卡 -> 出王冠卡 : 出王冠卡",
+  ],
 
   // Key: Action / ActionID
   // Val: Select order string, will use `priority` value in config if val is "" or "default".
@@ -113,6 +122,8 @@ Auto targeting the nearest enemy when casting actions. Damage actions will ignor
   {"天星交错", 16556},
   {"擢升", 25873},
   {"地星", 7439},
+  {"小奥秘卡", 7443},
+  {"抽卡", 3590},
   {"Essential Dignity", 3614},
   {"Play", 17055},
   {"Aspected Benefic", 3595},
@@ -132,5 +143,11 @@ Auto targeting the nearest enemy when casting actions. Damage actions will ignor
   {"Excogitation", 7434},
   {"Aetherpact", 7423},
   {"Protraction", 25867},
+
+  // WAR
+  {"重劈", 31},
+  {"凶残裂", 37},
+  {"暴风斩", 42},
+  {"暴风碎", 45},
 }
 ```

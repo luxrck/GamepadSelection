@@ -12,6 +12,7 @@ using Dalamud.Hooking;
 using Newtonsoft.Json;
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 
@@ -30,12 +31,44 @@ namespace GamepadTweaks
         public uint useType;
         public uint pvp;
         public IntPtr a8;
+
+        public bool ready;
+        public bool done;
+        public DateTime lastTime;
+
+        private Random rnd = new Random();
+
+        public UseActionArgs() {
+            ready = false;
+            done = false;
+            lastTime = DateTime.Now;
+        }
+
+        public bool Equals(UseActionArgs o)
+        {
+            return actionType == o.actionType && actionID == o.actionID &&
+                   targetedActorID == o.targetedActorID && param == o.param &&
+                   useType == o.useType && pvp == o.pvp;
+        }
+
+        public bool IsValid() => this.actionID > 0;
     }
 
     public class Member {
         public string Name;
         public uint ID;
         public uint JobID;
+    }
+
+    public enum GamepadActionManagerState : int
+    {
+        Start = 0,
+        EnteringGamepadSelection = 1,
+        InGamepadSelection = 2,
+        // ExitingGamepadSelection = 3,
+        GsActionInQueue = 4,
+        // ExecuteAction = 5,
+        ActionExecuted = 6,
     }
 
     class GamepadActionManager : IDisposable
@@ -59,12 +92,18 @@ namespace GamepadTweaks
             {"e", (ushort)GamepadButtons.East},
         };
 
+        public GamepadActionManagerState state = GamepadActionManagerState.Start;
         public bool inGamepadSelectionMode = false;
 
         private ushort savedButtonsPressed;
         private UseActionArgs gsAction;
+        private IntPtr comboTimerPtr;
+        private IntPtr lastComboActionPtr;
+
+        private ActionMap ActionMap = new ActionMap();
 
         private Configuration Config = Plugin.Config;
+        private SigScanner SigScanner = Plugin.SigScanner;
         private GamepadState GamepadState = Plugin.GamepadState;
         private PartyList PartyList = Plugin.PartyList;
         private GameGui GameGui = Plugin.GameGui;
@@ -72,143 +111,284 @@ namespace GamepadTweaks
         private ObjectTable Objects = Plugin.Objects;
         private TargetManager TargetManager = Plugin.TargetManager;
 
-        public GamepadActionManager() {
+        public GamepadActionManager()
+        {
             this.gsAction = new UseActionArgs();
 
-            var Signature = "E8 ?? ?? ?? ?? EB 64 B1 01";
-            var useAction = Plugin.SigScanner.ScanText(Signature);
+            var useAction = SigScanner.ScanText("E8 ?? ?? ?? ?? EB 64 B1 01");
             this.useActionHook = new Hook<UseActionDelegate>(useAction, this.UseActionDetour);
 
+            var getIcon = SigScanner.ScanText("E8 ?? ?? ?? ?? 8B F8 3B DF");
+            this.getIconHook = new Hook<GetIconDelegate>(getIcon, this.GetIconDetour);
+
+            var isIconReplaceable = SigScanner.ScanText("81 F9 ?? ?? ?? ?? 7F 35");
+            this.isIconReplaceableHook = new Hook<IsIconReplaceableDelegate>(isIconReplaceable, IsIconReplaceableDetour);
+
+            // this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("E8 ?? ?? ?? ?? 80 7E 21 00", 0x178) - 4;
+            this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("F3 0F 11 05 ?? ?? ?? ?? F3 0F 10 45 ?? E8");
+            this.lastComboActionPtr = this.comboTimerPtr + 0x04;
+
+
             this.useActionHook.Enable();
+            this.isIconReplaceableHook.Enable();
+            this.getIconHook.Enable();
         }
 
         private Hook<UseActionDelegate> useActionHook;
         private delegate bool UseActionDelegate(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8);
         private bool UseActionDetour(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8)
         {
+            var a = new UseActionArgs();
             bool ret = false;
-            var adjustedID = actionID;
+            
+            // original slot action which combo-chains place at. (eg: comboGroup)
+            var originalActionID = actionID;
+            
+            var adjustedID = this.AdjustedActionID(actionManager, actionID);
+            var status = this.ActionStatus(actionManager, actionType, adjustedID, targetedActorID);
+            
+            // update real base actionID using adjustedID
+            actionID = ActionMap.GetBaseActionID(adjustedID);
+
             var pmap = this.GetSortedPartyMembers();
-            var target = TargetManager.Target ?? (Config.autoTargeting ? NearestTarget() : null);
+            var target = TargetManager.Target;
             var softTarget = TargetManager.SoftTarget;
             bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
 
-            unsafe {
-                var am = (ActionManager*)actionManager;
-                if (am != null)
-                    adjustedID = am->GetAdjustedActionId(actionID);
-            }
+            //
+            // BEGIN: 显式忽略某些类型的情况
+            //
+            var targetID = softTarget is not null ? softTarget.ObjectId : (target is not null ? target.ObjectId : 3758096384U);  // default value
 
-            if (this.inGamepadSelectionMode) {
-                var a = this.gsAction;
-                try {
+            if (targetID != targetedActorID)
+                return this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+            
+            if (this.gsAction.done && this.gsAction.actionID == adjustedID && (DateTime.Now - this.gsAction.lastTime).Milliseconds < 400)
+                return ret;
+            //
+            // END
+            //
+
+            MainLoop:
+            switch (this.state)
+            {
+                case GamepadActionManagerState.Start:
+                    if (Config.IsGtoffAction(actionID) || Config.IsGtoffAction(adjustedID)) {
+                        unsafe {
+                            var am = (ActionManager*)actionManager;
+                            var tgt = target ?? softTarget;
+                            if (tgt is not null) {
+                                try {
+                                    var p = tgt.Position;
+                                    var ap = new Vector3() {
+                                        X = p.X, Y = p.Y, Z = p.Z
+                                    };
+                                    if (am is not null)
+                                        am->UseActionLocation((ActionType)actionType, adjustedID, targetedActorID, &ap);
+                                } catch(Exception e) {
+                                    PluginLog.Log($"Exception: {e}");
+                                }
+                            } else {
+                                // Will enter ground targeting mode if action uses ground targeting.
+                                ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+
+                                // Cast again to emulate <gtoff>
+                                ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+                            }
+                        }
+
+                        this.state = GamepadActionManagerState.ActionExecuted;
+                    } else if (!pmap.Any(x => x.ID == targetedActorID) && (Config.IsGsAction(actionID) || Config.IsGsAction(adjustedID))) {
+                        a.actionManager = actionManager;
+                        a.actionType = actionType;
+                        a.actionID = adjustedID;
+                        a.targetedActorID = targetedActorID;
+                        a.param = param;
+                        a.useType = useType;
+                        a.pvp = pvp;
+                        a.a8 = a8;
+                        // a.ready = false;
+                        // a.done = false;
+
+                        this.state = GamepadActionManagerState.EnteringGamepadSelection;
+                    } else {
+                        // Auto-targeting only for normal actions.
+                        target = target ?? (Config.autoTargeting ? NearestTarget() : null);
+
+                        // Cast normally if:
+                        //  1. We are not in party
+                        //  2. We already target a party member
+                        //  3. Action not in monitor (any action could be a combo action)
+                        if (softTarget is not null) {
+                            targetedActorID = softTarget.ObjectId;
+                        } else if (target is not null) {
+                            targetedActorID = target.ObjectId;
+                        }
+
+                        ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+                        
+                        this.state = GamepadActionManagerState.ActionExecuted;
+                    }
+                    goto MainLoop;
+                case GamepadActionManagerState.EnteringGamepadSelection:
+                    this.gsAction = a;
+
+                    // 未满足发动条件?
+                    // 未满足发动条件的GsAction直接跳过, 不进行目标选择.
+                    if (status == 572)  {
+                        this.state = GamepadActionManagerState.ActionExecuted;
+                        goto MainLoop;
+                    }
+
+                    this.state = GamepadActionManagerState.InGamepadSelection;
+                    break;
+                case GamepadActionManagerState.InGamepadSelection:
+                    var o = this.gsAction;
+                    
+                    adjustedID = this.AdjustedActionID(actionManager, o.actionID);
+                    
+                    // update real base actionID using adjustedID
+                    actionID = ActionMap.GetBaseActionID(adjustedID);
+                    
+                    try {
+                        unsafe {
+                            var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
+
+                            // Only use [up down left right y a x b]
+                            // 目前GSM只在lt/rt按下, 即激活十字热键栏预备施放技能时可用.
+                            ushort buttons = (ushort)(ginput->ButtonsPressed & 0xff);
+                            
+                            // 1 0 1 0 Pre
+                            // 1 1 0 0 Now
+                            // 0 1 0 0 Strategy 1 : Config.ignoreRepeatedButtons == true
+                            // 1 1 0 0 Strategy 2
+                            // 如果上一次状态和本次相同, 不能判断到底是哪个按键触发了Action.
+                            // 多个按键同时按下, 选择优先级高的按键
+                            buttons = (ushort)((buttons ^ this.savedButtonsPressed) & buttons);
+
+                            if (buttons == 0)
+                                buttons = this.savedButtonsPressed;
+
+                            var order = Config.SelectOrder(a.actionID).ToLower().Trim().Split(" ").Where((a) => a != "").ToList();
+                            var gsTargetedActorIndex = order.FindIndex((b) => ButtonMap.ContainsKey(b) ? (ButtonMap[b] & buttons) > 0 : false);
+
+                            PluginLog.Debug($"[Party] originalIndex: {gsTargetedActorIndex}");
+
+                            if (pmap.Count > 0) {
+                                gsTargetedActorIndex = gsTargetedActorIndex == -1 ? 0 : (gsTargetedActorIndex >= pmap.Count - 1 ? pmap.Count - 1 : gsTargetedActorIndex);
+
+                                var gsTargetedActorID = targetedActorID;
+                                if (!pmap.Any(x => x.ID == (uint)targetedActorID)) {   // Disable GSM if we already selected a member.
+                                    gsTargetedActorID = pmap[gsTargetedActorIndex].ID;
+                                    // TargetManager.SetSoftTarget(Objects.SearchById(gsTargetedActorID));
+                                }
+                                this.gsAction.targetedActorID = gsTargetedActorID;
+                            }
+
+                            Func<int, string> _S = (x) => Convert.ToString(x, 2).PadLeft(8, '0');
+                            PluginLog.Debug($"[Party] ID: {PartyList.PartyId}, Length: {pmap.Count}, index: {gsTargetedActorIndex}, btn: {_S(buttons)}, savedBtn: {_S(this.savedButtonsPressed)}, origBtn: {_S(ginput->ButtonsPressed & 0xff)}, reptBtn: {_S((ginput->ButtonsRepeat & 0xff))}");
+                            PluginLog.Debug($"[Party] ActionID: {o.actionID}, AdjustedID: {o.actionID}, TargetID: {o.targetedActorID}, ready?: {o.ready}, state: {this.state}, status: {status}, ret: {ret}");
+                        }
+                    } catch(Exception e) {
+                        PluginLog.Error($"Exception: {e}");
+                    }
+
+                    // a.actionID = adjustedID;
+
+                    // TargetManager.ClearSoftTarget();
+                    // TargetManager.SetTarget(previousTarget);
+                    // TargetManager.SetSoftTarget(previousTarget);
+
+                    targetedActorID = o.targetedActorID;
+                    
+                    status = this.ActionStatus(actionManager, o.actionType, adjustedID, targetedActorID);
+
+                    // this.gsAction.ready = true;
+                    // this.gsAction.lastTime = DateTime.Now;
+                    ret = this.useActionHook.Original(o.actionManager, o.actionType, o.actionID, o.targetedActorID, o.param, o.useType, o.pvp, o.a8);
+
+                    this.savedButtonsPressed = 0;
+                    
+                    // 如果能力技资源可用, 只执行一次.
+                    // GsAction需要两步操作完成执行(1. 触发Action, 2. 选中目标)
+                    // code 580: 进入队列之后, 如果当时资源不可以, 会执行第二次. 第二次执行应该自动使用第一次选中的目标.
+                    // 问题: 这两次执行之间有没有可能存在其它Action的执行? 还是说一定顺序执行完当前能力技之后再说?
+                    // 可以存在
+                    if (status == 580) {
+                        this.gsAction.ready = true;
+                        this.state = GamepadActionManagerState.GsActionInQueue;
+                        break;
+                    }
+                    
+                    this.state = GamepadActionManagerState.ActionExecuted;
+                    goto MainLoop;
+                case GamepadActionManagerState.GsActionInQueue:
+                    o = this.gsAction;
+                    actionID = o.actionID;
+                    adjustedID = this.AdjustedActionID(actionManager, o.actionID);
+                    targetedActorID = o.targetedActorID;
+                    
+                    status = this.ActionStatus(actionManager, o.actionType, adjustedID, targetedActorID);
+                    
+                    // 先执行完成这个技能再考虑其它
+                    if (o.ready && !o.done) {
+                        // var tgt = Objects.SearchById(o.targetedActorID);
+                        // var originalTgt = TargetManager.Target;
+                        // TargetManager.SetTarget(tgt);
+                        ret = this.useActionHook.Original(actionManager, o.actionType, o.actionID, o.targetedActorID, param, useType, pvp, a8);
+                        // if (originalTgt is not null)
+                        //     TargetManager.SetTarget(originalTgt);
+                        // o.ready = false;
+                    }
+
+                    if (ret && (status == 0 || status == 582 || status != 580)) {
+                        o.done = true;
+                        o.lastTime = DateTime.Now;
+                    }
+                    
+                    PluginLog.Debug($"[Party] ActionID: {o.actionID}, AdjustedID: {o.actionID}, TargetID: {o.targetedActorID}, ready?: {o.ready}, state: {this.state}, status: {status}, ret: {ret}");
+
+                    if (!o.done) break;
+
+                    this.gsAction = new UseActionArgs();
+
+                    this.state = GamepadActionManagerState.ActionExecuted;
+                    goto MainLoop;
+                case GamepadActionManagerState.ActionExecuted:
                     unsafe {
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
+                        this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        // Only use [up down left right y a x b]
-                        // 目前GSM只在lt/rt按下, 即激活十字热键栏预备施放技能时可用.
-                        ushort buttons = (ushort)(ginput->ButtonsPressed & 0xff);
-                        
-                        // 1 0 1 0 Pre
-                        // 1 1 0 0 Now
-                        // 0 1 0 0 Strategy 1 : Config.ignoreRepeatedButtons == true
-                        // 1 1 0 0 Strategy 2
-                        // 如果上一次状态和本次相同, 不能判断到底是哪个按键触发了Action.
-                        // 多个按键同时按下, 选择优先级高的按键
-                        buttons = (ushort)((buttons ^ this.savedButtonsPressed) & buttons);
+                        PluginLog.Debug($"[DONE] ActionID: {actionID}, AdjustedID: {adjustedID}, TargetID: {targetedActorID}, ready?: {this.gsAction.ready}, state: {this.state}, status: {status}, ret: {ret}");
 
-                        if (buttons == 0)
-                            buttons = this.savedButtonsPressed;
-
-                        var order = Config.SelectOrder(a.actionID).ToLower().Trim().Split(" ").Where((a) => a != "").ToList();
-                        var gsTargetedActorIndex = order.FindIndex((b) => ButtonMap.ContainsKey(b) ? (ButtonMap[b] & buttons) > 0 : false);
-
-                        if (pmap.Count > 0) {
-                            gsTargetedActorIndex = gsTargetedActorIndex == -1 ? 0 : (gsTargetedActorIndex >= pmap.Count - 1 ? pmap.Count - 1 : gsTargetedActorIndex);
-
-                            var gsTargetedActorID = targetedActorID;
-                            if (!pmap.Any(x => x.ID == (uint)targetedActorID)) {   // Disable GSM if we already selected a member.
-                                gsTargetedActorID = pmap[gsTargetedActorIndex].ID;
-                            }
-                            this.gsAction.targetedActorID = gsTargetedActorID;
-                        }
-
-                        Func<int, string> _S = (x) => Convert.ToString(x, 2).PadLeft(8, '0');
-                        PluginLog.Debug($"[Party] ID: {PartyList.PartyId}, Length: {pmap.Count}, index: {gsTargetedActorIndex}, btn: {_S(buttons)}, savedBtn: {_S(this.savedButtonsPressed)}, origBtn: {_S(ginput->ButtonsPressed & 0xff)}, reptBtn: {_S((ginput->ButtonsRepeat & 0xff))}, Action: {a.actionID} Target: {a.targetedActorID}");
                     }
-                } catch(Exception e) {
-                    PluginLog.Error($"Exception: {e}");
-                }
-
-                ret = this.useActionHook.Original(a.actionManager, a.actionType, a.actionID, a.targetedActorID, a.param, a.useType, a.pvp, a.a8);
-
-                this.savedButtonsPressed = 0;
-                this.inGamepadSelectionMode = false;
-            } else {
-                if (Config.IsGtoffAction(actionID) || Config.IsGtoffAction(adjustedID)) {
-                    // Will enter ground targeting mode if action uses ground targeting.
-                    ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
-
-                    unsafe {
-                        var am = (ActionManager*)actionManager;
-                        if (target is not null) {
-                            try {
-                                var p = target.Position;
-                                var ap = new Vector3() {
-                                    X = p.X, Y = p.Y, Z = p.Z
-                                };
-                                if (am is not null)
-                                    am->UseActionLocation((ActionType)actionType, actionID, targetedActorID, &ap);
-                            } catch(Exception e) {
-                                PluginLog.Log($"Exception: {e}");
-                            }
-                        } else {
-                            // Cast again to emulate <gtoff>
-                            ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
-                        }
-                    }
-                } else if (
-                    !inParty ||
-                    target is not null && pmap.Any(x => x.ID == target.ObjectId) ||
-                    softTarget is not null && pmap.Any(x => x.ID == softTarget.ObjectId) || // SoftTarget support.
-                    !(Config.ActionInMonitor(actionID) || Config.ActionInMonitor(adjustedID))
-                ) {
-                    // Cast normally if:
-                    //  1. We are not in party
-                    //  2. We already target a party member
-                    //  3. Action not in monitor
-                    if (softTarget is not null)
-                        targetedActorID = softTarget.ObjectId;
-                    ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
-
-                    if (!ret) {
-                        if (target is not null)
-                            targetedActorID = target.ObjectId;
-                        ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+    
+                    // Update combo action icon.
+                    if (status != 580 && (Config.IsComboAction(actionID) || Config.IsComboAction(adjustedID))) {
+                        if (Config.UpdateComboState(actionID) || Config.UpdateComboState(adjustedID));    
                     }
 
-                    var tgtID = target is not null ? target.ObjectId : 0;
-                    var softTgtID = softTarget is not null ? softTarget.ObjectId : 0;
-                    PluginLog.Debug($"ActionID: {actionID}, AdjustedID: {adjustedID}, TargetID: {tgtID}, SoftTargetID: {softTgtID}");
-                } else {
-                    this.gsAction.actionManager = actionManager;
-                    this.gsAction.actionType = actionType;
-                    this.gsAction.actionID = actionID;
-                    this.gsAction.targetedActorID = targetedActorID;
-                    this.gsAction.param = param;
-                    this.gsAction.useType = useType;
-                    this.gsAction.pvp = pvp;
-                    this.gsAction.a8 = a8;
-                    this.inGamepadSelectionMode = true;
-                }
-            }
-
-            unsafe {
-                var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
-                this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
+                    this.state = GamepadActionManagerState.Start;
+                    break;
             }
 
             return ret;
+        }
+
+        public Hook<IsIconReplaceableDelegate> isIconReplaceableHook;
+        public delegate ulong IsIconReplaceableDelegate(uint actionID);
+        private ulong IsIconReplaceableDetour(uint actionID) => 1;
+
+        public Hook<GetIconDelegate> getIconHook;
+        public delegate uint GetIconDelegate(IntPtr actionManager, uint actionID);
+        public uint GetIconDetour(IntPtr actionManager, uint actionID)
+        {
+            var lastComboAction = Marshal.ReadInt32(this.lastComboActionPtr);
+            var comboTimer = Marshal.PtrToStructure<float>(this.comboTimerPtr);
+
+            // 小奥秘卡 -> 出王冠卡 : 出王冠卡
+            var comboActionID = Config.CurrentComboAction(actionID, (uint)lastComboAction, comboTimer);
+            return this.getIconHook.Original(actionManager, comboActionID);
         }
 
         private List<Member> GetSortedPartyMembers(string order = "thmr")
@@ -258,7 +438,7 @@ namespace GamepadTweaks
 
                     var objectMap = new Dictionary<string, uint>();
 
-                    if (addonPartyList->TrustCount > 0) {
+                    if (addonPartyList->TrustCount > 0 || addonPartyList->ChocoboCount > 0) {
                         foreach (var obj in Objects) {
                             var name = obj.Name.ToString().Trim();
 
@@ -279,8 +459,18 @@ namespace GamepadTweaks
                             ID = objectMap.ContainsKey(name) ? objectMap[name] : 0,
                             JobID = 0,  // ignored
                         });
-                        var id = objectMap.ContainsKey(name) ? objectMap[name] : 0;
                     }
+
+                    var chocoboName = addonPartyList->Chocobo.Name->NodeText.ToString()
+                                                                            .Split(" ", 2)
+                                                                            .Last()
+                                                                            .Trim();
+
+                    me.Add(new Member() {
+                        Name = chocoboName,
+                        ID = objectMap.ContainsKey(chocoboName) ? objectMap[chocoboName] : 0,
+                        JobID = 0,
+                    });
 
                     return me;
                 }
@@ -435,13 +625,54 @@ namespace GamepadTweaks
             return o;
         }
 
-        public void Enable() => this.useActionHook.Enable();
-        public void Disable() => this.useActionHook.Disable();
+        public uint AdjustedActionID(IntPtr actionManager, uint actionID)
+        {
+            var adjustedID = actionID;
+            unsafe {
+                var am = (ActionManager*)actionManager;
+                if (am != null) {
+                    // real action id
+                    adjustedID = am->GetAdjustedActionId(actionID);
+                }
+            }
+            return adjustedID;
+        }
+
+        public uint ActionStatus(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID = 0u)
+        {
+            uint status = 0;
+            unsafe {
+                var am = (ActionManager*)actionManager;
+                if (am != null) {
+                    // code 580: 如果资源可以访问, 则尝试将Action加入技能队列?
+                    status = am->GetActionStatus((ActionType)actionType, actionID, targetedActorID);
+                }
+            }
+            return status;
+        }
+
+        public void Enable()
+        {
+            this.useActionHook.Enable();
+            this.isIconReplaceableHook.Enable();
+            this.getIconHook.Enable();
+        }
+
+        public void Disable()
+        {
+            this.useActionHook.Disable();
+            this.isIconReplaceableHook.Disable();
+            this.getIconHook.Disable();
+        }
 
         public void Dispose()
         {
             this.useActionHook.Disable();
             this.useActionHook.Dispose();
+            this.isIconReplaceableHook.Disable();
+            this.isIconReplaceableHook.Dispose();
+            this.getIconHook.Disable();
+            this.getIconHook.Dispose();
             GC.SuppressFinalize(this);
         }
     }
