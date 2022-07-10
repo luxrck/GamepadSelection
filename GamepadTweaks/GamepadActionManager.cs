@@ -160,16 +160,19 @@ namespace GamepadTweaks
             //
             var targetID = softTarget is not null ? softTarget.ObjectId : (target is not null ? target.ObjectId : 3758096384U);  // default value
 
-            if (targetID != targetedActorID)
+            if (targetID != targetedActorID) {
+                PluginLog.Debug($"targetID mismatch. {actionID} {adjustedID}");
                 return this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+            }
             
-            if (this.gsAction.done && this.gsAction.actionID == adjustedID && (DateTime.Now - this.gsAction.lastTime).Milliseconds < 400)
+            if (this.gsAction.done && this.gsAction.actionID == adjustedID && (DateTime.Now - this.gsAction.lastTime).Milliseconds < 400) {
                 return ret;
+            }
             //
             // END
             //
 
-            MainLoop:
+        MainLoop:
             switch (this.state)
             {
                 case GamepadActionManagerState.Start:
@@ -324,24 +327,27 @@ namespace GamepadTweaks
                     goto MainLoop;
                 case GamepadActionManagerState.GsActionInQueue:
                     o = this.gsAction;
-                    actionID = o.actionID;
-                    adjustedID = this.AdjustedActionID(actionManager, o.actionID);
-                    targetedActorID = o.targetedActorID;
-                    
-                    status = this.ActionStatus(actionManager, o.actionType, adjustedID, targetedActorID);
+                    // ostatus = this.ActionStatus(actionManager, o.actionType, o.actionID, o.targetedActorID);
                     
                     // 先执行完成这个技能再考虑其它
-                    if (o.ready && !o.done) {
-                        // var tgt = Objects.SearchById(o.targetedActorID);
-                        // var originalTgt = TargetManager.Target;
-                        // TargetManager.SetTarget(tgt);
-                        ret = this.useActionHook.Original(actionManager, o.actionType, o.actionID, o.targetedActorID, param, useType, pvp, a8);
-                        // if (originalTgt is not null)
-                        //     TargetManager.SetTarget(originalTgt);
-                        // o.ready = false;
-                    }
+                    // if (o.ready && !o.done) {
+                    //     // var tgt = Objects.SearchById(o.targetedActorID);
+                    //     // var originalTgt = TargetManager.Target;
+                    //     // TargetManager.SetTarget(tgt);
+                    //     ret = this.useActionHook.Original(actionManager, o.actionType, o.actionID, o.targetedActorID, param, useType, pvp, a8);
+                    //     // if (originalTgt is not null)
+                    //     //     TargetManager.SetTarget(originalTgt);
+                    //     // o.ready = false;
+                    // }
 
-                    if (ret && (status == 0 || status == 582 || status != 580)) {
+                    // 魔法 + 能力 + 魔法2. 如果[能力]当前不可插入, 系统会自动在其可以插入的时刻再次调用UseAction
+                    // 魔法 + 能力 + 魔法2 with Gs. 触发能力之后需要再次按下按键以选中目标. 但这样也会触发原本处于该按键上的Action.
+                    // 魔法2需要自己掌控时机手动插入. 当资源可用的时候, status应该为582或0? 意味着能力已经被系统自动插入了.
+                    // 因此, 此时不再屏蔽这个Action输入, 调用UseAction以手动插施放魔法2.
+                    // 如不处理, 则将需要再次点击一次按键以完成魔法2的施放.
+                    // 1 + (1 + 1) + 1
+                    if (status == 0 || status == 582 || status != 580) {
+                        ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
                         o.done = true;
                         o.lastTime = DateTime.Now;
                     }
@@ -350,7 +356,11 @@ namespace GamepadTweaks
 
                     if (!o.done) break;
 
-                    this.gsAction = new UseActionArgs();
+                    // this.gsAction = new UseActionArgs();
+                    
+                    actionID = o.actionID;
+                    adjustedID = this.AdjustedActionID(actionManager, o.actionID);
+                    targetedActorID = o.targetedActorID;
 
                     this.state = GamepadActionManagerState.ActionExecuted;
                     goto MainLoop;
