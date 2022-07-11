@@ -145,10 +145,10 @@ namespace GamepadTweaks
             var originalActionID = actionID;
             
             var adjustedID = this.AdjustedActionID(actionManager, actionID);
-            var status = this.ActionStatus(actionManager, actionType, adjustedID, targetedActorID);
+            var status = this.GetActionStatus(actionManager, actionType, adjustedID, targetedActorID);
             
             // update real base actionID using adjustedID
-            actionID = ActionMap.GetBaseActionID(adjustedID);
+            actionID = ActionMap.BaseActionID(adjustedID);
 
             var pmap = this.GetSortedPartyMembers();
             var target = TargetManager.Target;
@@ -158,16 +158,19 @@ namespace GamepadTweaks
             //
             // BEGIN: 显式忽略某些类型的情况
             //
-            var targetID = softTarget is not null ? softTarget.ObjectId : (target is not null ? target.ObjectId : 3758096384U);  // default value
+            // var targetID = softTarget is not null ? softTarget.ObjectId : (target is not null ? target.ObjectId : 3758096384U);  // default value
+            PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} status: {status}, state: {this.state}");
 
-            if (targetID != targetedActorID) {
-                PluginLog.Debug($"targetID mismatch. {actionID} {adjustedID}");
-                return this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
-            }
+            // if (targetID != targetedActorID) {
+            // if (status == ActionStatus.Done) {
+            //     ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+            //     this.state = GamepadActionManagerState.Start;
+            //     goto MainReturn;
+            // }
             
-            if (this.gsAction.done && this.gsAction.actionID == adjustedID && (DateTime.Now - this.gsAction.lastTime).Milliseconds < 400) {
-                return ret;
-            }
+            // if (this.gsAction.done && this.gsAction.actionID == adjustedID && (DateTime.Now - this.gsAction.lastTime).Milliseconds < 400) {
+            //     return ret;
+            // }
             //
             // END
             //
@@ -175,6 +178,7 @@ namespace GamepadTweaks
         MainLoop:
             switch (this.state)
             {
+                // handle ActionStatus.Done
                 case GamepadActionManagerState.Start:
                     if (Config.IsGtoffAction(actionID) || Config.IsGtoffAction(adjustedID)) {
                         unsafe {
@@ -201,31 +205,38 @@ namespace GamepadTweaks
                         }
 
                         this.state = GamepadActionManagerState.ActionExecuted;
-                    } else if (!pmap.Any(x => x.ID == targetedActorID) && (Config.IsGsAction(actionID) || Config.IsGsAction(adjustedID))) {
-                        a.actionManager = actionManager;
-                        a.actionType = actionType;
-                        a.actionID = adjustedID;
-                        a.targetedActorID = targetedActorID;
-                        a.param = param;
-                        a.useType = useType;
-                        a.pvp = pvp;
-                        a.a8 = a8;
-                        // a.ready = false;
-                        // a.done = false;
+                    } else if (Config.IsGsAction(actionID) || Config.IsGsAction(adjustedID)) {
+                        if (status == ActionStatus.Done || pmap.Any(x => x.ID == targetedActorID)) {
+                            ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+                            this.state = GamepadActionManagerState.ActionExecuted;
+                        } else {
+                            a.actionManager = actionManager;
+                            a.actionType = actionType;
+                            a.actionID = adjustedID;
+                            a.targetedActorID = targetedActorID;
+                            a.param = param;
+                            a.useType = useType;
+                            a.pvp = pvp;
+                            a.a8 = a8;
+                            // a.ready = false;
+                            // a.done = false;
 
-                        this.state = GamepadActionManagerState.EnteringGamepadSelection;
+                            this.state = GamepadActionManagerState.EnteringGamepadSelection;
+                        }
                     } else {
-                        // Auto-targeting only for normal actions.
-                        target = target ?? (Config.autoTargeting ? NearestTarget() : null);
+                        if (status != ActionStatus.Done) {
+                            // Auto-targeting only for normal actions.
+                            target = target ?? (Config.autoTargeting ? NearestTarget() : null);
 
-                        // Cast normally if:
-                        //  1. We are not in party
-                        //  2. We already target a party member
-                        //  3. Action not in monitor (any action could be a combo action)
-                        if (softTarget is not null) {
-                            targetedActorID = softTarget.ObjectId;
-                        } else if (target is not null) {
-                            targetedActorID = target.ObjectId;
+                            // Cast normally if:
+                            //  1. We are not in party
+                            //  2. We already target a party member
+                            //  3. Action not in monitor (any action could be a combo action)
+                            if (softTarget is not null) {
+                                targetedActorID = softTarget.ObjectId;
+                            } else if (target is not null) {
+                                targetedActorID = target.ObjectId;
+                            }
                         }
 
                         ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
@@ -238,7 +249,7 @@ namespace GamepadTweaks
 
                     // 未满足发动条件?
                     // 未满足发动条件的GsAction直接跳过, 不进行目标选择.
-                    if (status == 572)  {
+                    if (status != ActionStatus.Done && status != ActionStatus.Locking && status != ActionStatus.Pending)  {
                         this.state = GamepadActionManagerState.ActionExecuted;
                         goto MainLoop;
                     }
@@ -251,7 +262,7 @@ namespace GamepadTweaks
                     adjustedID = this.AdjustedActionID(actionManager, o.actionID);
                     
                     // update real base actionID using adjustedID
-                    actionID = ActionMap.GetBaseActionID(adjustedID);
+                    actionID = ActionMap.BaseActionID(adjustedID);
                     
                     try {
                         unsafe {
@@ -304,7 +315,7 @@ namespace GamepadTweaks
 
                     targetedActorID = o.targetedActorID;
                     
-                    status = this.ActionStatus(actionManager, o.actionType, adjustedID, targetedActorID);
+                    status = this.GetActionStatus(actionManager, o.actionType, adjustedID, targetedActorID);
 
                     // this.gsAction.ready = true;
                     // this.gsAction.lastTime = DateTime.Now;
@@ -317,7 +328,7 @@ namespace GamepadTweaks
                     // code 580: 进入队列之后, 如果当时资源不可以, 会执行第二次. 第二次执行应该自动使用第一次选中的目标.
                     // 问题: 这两次执行之间有没有可能存在其它Action的执行? 还是说一定顺序执行完当前能力技之后再说?
                     // 可以存在
-                    if (status == 580) {
+                    if (status == ActionStatus.Locking) {
                         this.gsAction.ready = true;
                         this.state = GamepadActionManagerState.GsActionInQueue;
                         break;
@@ -327,7 +338,7 @@ namespace GamepadTweaks
                     goto MainLoop;
                 case GamepadActionManagerState.GsActionInQueue:
                     o = this.gsAction;
-                    // ostatus = this.ActionStatus(actionManager, o.actionType, o.actionID, o.targetedActorID);
+                    var ostatus = this.GetActionStatus(actionManager, o.actionType, o.actionID, o.targetedActorID);
                     
                     // 先执行完成这个技能再考虑其它
                     // if (o.ready && !o.done) {
@@ -346,7 +357,7 @@ namespace GamepadTweaks
                     // 因此, 此时不再屏蔽这个Action输入, 调用UseAction以手动插施放魔法2.
                     // 如不处理, 则将需要再次点击一次按键以完成魔法2的施放.
                     // 1 + (1 + 1) + 1
-                    if (status == 0 || status == 582 || status != 580) {
+                    if (status == ActionStatus.Done || status == ActionStatus.Pending) {
                         ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
                         o.done = true;
                         o.lastTime = DateTime.Now;
@@ -369,18 +380,18 @@ namespace GamepadTweaks
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                         this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        PluginLog.Debug($"[DONE] ActionID: {actionID}, AdjustedID: {adjustedID}, TargetID: {targetedActorID}, ready?: {this.gsAction.ready}, state: {this.state}, status: {status}, ret: {ret}");
-
+                        PluginLog.Debug($"[DONE] ActionID: {actionID}, AdjustedID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, ready?: {this.gsAction.ready}, state: {this.state}, status: {status}, ret: {ret}");
                     }
     
-                    // Update combo action icon.
-                    if (status != 580 && (Config.IsComboAction(actionID) || Config.IsComboAction(adjustedID))) {
-                        if (Config.UpdateComboState(actionID) || Config.UpdateComboState(adjustedID));    
-                    }
-
                     this.state = GamepadActionManagerState.Start;
                     break;
             }
+
+        MainReturn:
+
+            // Update combo action icon.
+            if (Config.IsComboAction(actionID) && Config.UpdateComboState(actionID, status));
+            else if (Config.IsComboAction(adjustedID) && Config.UpdateComboState(adjustedID, status));
 
             return ret;
         }
@@ -648,8 +659,13 @@ namespace GamepadTweaks
             return adjustedID;
         }
 
-        public uint ActionStatus(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID = 0u)
+        private ActionStatus GetActionStatus(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID = 3758096384U)
         {
+            // 以下均为猜测:
+            // 000: 资源可用, 可以马上被执行(技能队列中的Action资源可用时, 游戏会调用UseAction, 此时status为0)
+            // 572: 未满足发动条件
+            // 580: 资源暂时不可用(加入技能队列当其可用时), 因为上一个技能的动画锁还未解除(通常需要等待~0.5s)?
+            // 582: 资源可用, 可以马上插入技能队列
             uint status = 0;
             unsafe {
                 var am = (ActionManager*)actionManager;
@@ -658,7 +674,13 @@ namespace GamepadTweaks
                     status = am->GetActionStatus((ActionType)actionType, actionID, targetedActorID);
                 }
             }
-            return status;
+            
+            try {
+                return (ActionStatus)status;
+            } catch(Exception e) {
+                PluginLog.Debug($"Exception: {e}");
+                return ActionStatus.Invalid;
+            }
         }
 
         public void Enable()

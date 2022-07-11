@@ -60,10 +60,14 @@ Combo support like [XivComboPlugin](https://github.com/attickdoor/XIVComboPlugin
   // y → left <=> party member no.1 → no.8
   "priority": "y b a x up right down left",
 
-  // <combo chain> : <slot action>
+  // <combo type> : <combo chain> : <slot action>
+  // l:  Linear
+  // ls: LinearWithSkip
+  // m:  Manual
+  // s:  Strict
   "combo": [
-    "重劈 -> 凶残裂 -> 暴风斩 : 暴风斩",
-    "小奥秘卡 -> 出王冠卡 : 出王冠卡",
+    "ls: 重劈 -> 铁壁 -> 凶残裂 -> 暴风斩 : 暴风斩",  // 如果"铁壁"在CD, 则可以跳过铁壁, 状态转移到下一个.
+    "l : 小奥秘卡 -> 出王冠卡 : 出王冠卡",
   ],
 
   // Key: Action / ActionID

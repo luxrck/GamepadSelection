@@ -51,75 +51,9 @@ namespace GamepadTweaks
         public Dictionary<string, string> rules { get; set; } = new Dictionary<string, string>();
         #endregion
 
-        public Dictionary<string, uint> actions = new Dictionary<string, uint> {
-            // SGE
-            {"均衡诊断", 24291},
-            {"白牛清汁", 24303},
-            {"灵橡清汁", 24296},
-            {"混合", 24317},
-            {"输血", 24305},
-            {"Diagnosis", 24284},
-            {"Eukrasian Diagnosis", 24291},
-            {"Taurochole", 24303},
-            {"Druochole", 24296},
-            {"Krasis", 24317},
-            {"Haima", 24305},
-
-            // WHM
-            {"再生", 137},
-            {"天赐祝福", 140},
-            {"神祝祷", 7432},
-            {"神名", 3570},
-            {"水流幕", 25861},
-            {"安慰之心", 16531},
-            {"庇护所", 3569},
-            {"礼仪之铃", 25862},
-            {"Regen", 137},
-            {"Benediction", 140},
-            {"Divine Benison", 7432},
-            {"Tetragrammaton", 3570},
-            {"Aquaveil", 25861},
-            {"Afflatus Solace", 16531},
-            {"Asylum", 3569},
-            {"Liturgy of the Bell", 25862},
-
-            // AST
-            {"先天禀赋", 3614},
-            {"出卡", 17055},
-            {"吉星相位", 3595},
-            {"星位合图", 3612},
-            {"出王冠卡", 25869},
-            {"天星交错", 16556},
-            {"擢升", 25873},
-            {"地星", 7439},
-            {"小奥秘卡", 7443},
-            {"抽卡", 3590},
-            {"Essential Dignity", 3614},
-            {"Play", 17055},
-            {"Aspected Benefic", 3595},
-            {"Synastry", 3612},
-            {"Crown Play", 25869},
-            {"Celestial Intersection", 16556},
-            {"Exaltation", 25873},
-
-            // SCH
-            {"鼓舞激励之策", 185},
-            {"生命活性法", 189},
-            {"深谋远虑之策", 7434},
-            {"以太契约", 7423},
-            {"生命回生法", 25867},
-            {"Adloquium", 185},
-            {"Lustrate", 189},
-            {"Excogitation", 7434},
-            {"Aetherpact", 7423},
-            {"Protraction", 25867},
-
-            // WAR
-            {"重劈", 31},
-            {"凶残裂", 37},
-            {"暴风斩", 42},
-            {"暴风碎", 45},
-        };
+        // public Dictionary<string, uint> actions;
+        public ActionMap Actions = new ActionMap();
+        public ComboManager ComboManager;
 
         internal DirectoryInfo root;
         internal string configFile;
@@ -131,8 +65,6 @@ namespace GamepadTweaks
         private HashSet<uint> gsActions = new HashSet<uint>();
         private HashSet<uint> gtoffActions = new HashSet<uint>();
         private Dictionary<uint, string> userActions = new Dictionary<uint, string>();
-
-        private ComboManager comboManager;
 
         public Configuration()
         {
@@ -176,13 +108,13 @@ namespace GamepadTweaks
         public bool IsGsAction(uint actionID) => this.gsActions.Contains(actionID) || IsUserAction(actionID);
         public bool IsGtoffAction(uint actionID) => this.gtoffActions.Contains(actionID);
         public bool IsUserAction(uint actionID) => this.userActions.ContainsKey(actionID);
-        public bool IsComboAction(uint actionID) => this.comboManager.Contains(actionID);
-        public bool IsComboGroup(uint actionID) => this.comboManager.ContainsGroup(actionID);
+        public bool IsComboAction(uint actionID) => this.ComboManager.Contains(actionID);
+        public bool IsComboGroup(uint actionID) => this.ComboManager.ContainsGroup(actionID);
 
         public string SelectOrder(uint actionID) => IsUserAction(actionID) ? this.userActions[actionID] : this.priority;
 
-        public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.comboManager.Current(groupID, lastComboAction, comboTimer);
-        public bool UpdateComboState(uint actionID) => this.comboManager.StateUpdate(actionID);
+        public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.ComboManager.Current(groupID, lastComboAction, comboTimer);
+        public bool UpdateComboState(uint actionID, ActionStatus status = ActionStatus.Done) => this.ComboManager.StateUpdate(actionID, status);
 
         public bool Update(string content = "")
         {
@@ -228,16 +160,16 @@ namespace GamepadTweaks
             try {
                 var gs = new HashSet<uint>();
                 foreach(string s in this.gs) {
-                    if (this.actions.ContainsKey(s)) {
-                        gs.Add(this.actions[s]);
+                    if (Actions.Contains(s)) {
+                        gs.Add(Actions[s]);
                     }
                 }
                 this.gsActions = gs;
 
                 var gtoff = new HashSet<uint>();
                 foreach(string s in this.gtoff) {
-                    if (this.actions.ContainsKey(s)) {
-                        gtoff.Add(this.actions[s]);
+                    if (Actions.Contains(s)) {
+                        gtoff.Add(Actions[s]);
                     }
                 }
                 this.gtoffActions = gtoff;
@@ -245,8 +177,8 @@ namespace GamepadTweaks
                 var ua = new Dictionary<uint, string>();
                 foreach(var i in this.rules) {
                     uint actionID = 0;
-                    if (this.actions.ContainsKey(i.Key)) {
-                        actionID = this.actions[i.Key];
+                    if (Actions.Contains(i.Key)) {
+                        actionID = Actions[i.Key];
                     } else {
                         try {
                             actionID = UInt32.Parse(i.Key);
@@ -260,14 +192,15 @@ namespace GamepadTweaks
                 }
                 this.userActions = ua;
 
-                var cg = new Dictionary<uint, List<uint>>();
+                var cg = new List<(uint GroupID, List<uint> ComboActions, string ComboType)>();
                 foreach (string s in this.combo) {
                     var ss = s.Split(":");
-                    var comboActions = ss[0].Split("->").Where(a => a != "").Select(a => this.actions[a.Trim()]).ToList();
-                    var groupID = this.actions[ss[1].Trim()];
-                    cg.Add(groupID, comboActions);
+                    var comboType = ss[0].Trim();
+                    var comboActions = ss[1].Split("->").Where(a => a != "").Select(a => Actions[a.Trim()]).ToList();
+                    var groupID = Actions[ss[2].Trim()];
+                    cg.Add((groupID, comboActions, comboType));
                 }
-                this.comboManager = new ComboManager(cg);
+                this.ComboManager = new ComboManager(cg);
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 return false;
