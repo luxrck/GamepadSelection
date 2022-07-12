@@ -1,8 +1,7 @@
-﻿using Dalamud.Game;
+using Dalamud.Game;
 using Dalamud.Game.ClientState;
-using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.ClientState.Objects;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.GamePad;
 using Dalamud.Game.ClientState.Party;
 using Dalamud.Game.Command;
@@ -12,15 +11,10 @@ using Dalamud.IoC;
 using Dalamud.Interface.Windowing;
 using Dalamud.Logging;
 using Dalamud.Plugin;
-using Newtonsoft.Json;
-using System;
-using System.Linq;
-using System.Collections.Generic;
+using XivCommon;
 using System.Text.RegularExpressions;
 
 using GamepadTweaks.Attributes;
-
-using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace GamepadTweaks
 {
@@ -35,49 +29,48 @@ namespace GamepadTweaks
         [PluginService] public static PartyList PartyList { get; private set; } = null!;
         [PluginService] public static GamepadState GamepadState { get; private set; } = null!;
         [PluginService] public static TargetManager TargetManager { get; private set; } = null!;
-        
-        public static PluginCommandManager<Plugin> Commands { get; private set; }
-        public static Configuration Config { get; private set; }
-        
-        public string Name => "Gamepad Selection (for Healers)";
-        
+        [PluginService] public static Framework Framework { get; private set; } = null!;
+
+        public static XivCommonBase XivCommon { get; private set; } = null!;
+        public static Configuration Config { get; private set; } = null!;
+        public static PluginCommandManager<Plugin> Commands { get; private set; } = null!;
+
+        public string Name => "Gamepad Tweaks (for Healers)";
+
         private PluginWindow Window { get; set; }
         private WindowSystem WindowSystem { get; set; }
-        
+
         private GamepadActionManager GamepadActionManager;
 
         public Plugin(
             DalamudPluginInterface pi,
             CommandManager commands)
         {
+            XivCommon = new XivCommonBase();
             Config = Configuration.Load();
-            
+
             // Load all of our commands
             Commands = new PluginCommandManager<Plugin>(this, commands);
             GamepadActionManager = new GamepadActionManager();
-            
+
             // Initialize the UI
             Window = new PluginWindow();
             WindowSystem = new WindowSystem(Name);
             WindowSystem.AddWindow(Window);
-            
+
             PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
+            Framework.Update += GamepadActionManager.UpdateFramework;
         }
-        
+
         [Command("/gt")]
         [HelpMessage(@"Open setting panel.
 /gt on/off → Enable/Disable this plugin.
-/gt list → List actions and corresponding selection order.
+/gt info → Show gt info.
 /gt add <action> [<selectOrder>] → Add specific <action> in monitor.
 /gt remove <action> → Remove specific monitored <action>.
 
 <action>        Action name (in string).
-<selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons).
-   Xbox |   PS
-    y   |   △   |   n:North
-    b   |   ○   |   e:East
-    a   |   x   |   s:South
-    x   |   □   |   w:West")]
+<selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons (Xbox)).")]
         public void CommandGi(string command, string args)
         {
             if (args is null || args == "") {
@@ -89,31 +82,38 @@ namespace GamepadTweaks
                 switch(argv[0])
                 {
                     case "on":
-                        this.Echo("[GamepadTweaks] Enabled.");
+                        Echo("[GamepadTweaks] Enabled.");
                         GamepadActionManager.Enable();
                         break;
                     case "off":
-                        this.Echo("[GamepadTweaks] Disabled.");
+                        Echo("[GamepadTweaks] Disabled.");
                         GamepadActionManager.Disable();
                         break;
-                    case "list":
-                        this.Echo("[Actions in Monitor]");
+                    case "info":
+                        string bs(bool x) => x ? "●" : "○";
+                        // string pr<T>(T x, int s = 6) => $"{x}".PadRight(s);
+                        // string pl<T>(T x, int s = 6) => $"{x}".PadLeft(s);
+                        Echo("====== [S GamepadTweaks] ======");
+                        Echo($"小队成员: {bs(Config.alwaysInParty || PartyList.Length > 0)}");
+                        Echo($"自动锁定: {bs(Config.autoTargeting)}");
                         foreach(string a in Config.gtoff) {
-                            this.Echo($"{a} : gtoff");
+                            Echo($"[G] {a}");
                         }
                         foreach(string a in Config.gs) {
-                            this.Echo($"{a} : default");
+                            Echo($"[D] {a}");
                         }
                         foreach(var a in Config.rules) {
-                            this.Echo($"{a.Key} : {a.Value}");
+                            Echo(@$"[U] {a.Key} =>
+        {a.Value}");
                         }
+                        Echo("====== [E GamepadTweaks] ======");
                         break;
                     case "add":
                         try {
                             var actionkv = argv[1].Trim();
                             var pattern = new Regex(@"[\""\']?\s*(?<action>[\w\s]+\w)\s*[\""\']?(\s+[\""\']?\s*(?<order>[\w\s]+\w)\s*[\""\']?)?",
                                                     RegexOptions.Compiled);
-                            
+
                             var match = pattern.Match(actionkv);
 
                             var action = match.Groups.ContainsKey("action") ? match.Groups["action"].ToString() : "";
@@ -126,7 +126,7 @@ namespace GamepadTweaks
                                     Config.gs.Add(action);
                                 }
                             }
-                            this.Echo($"Add action: {action} ... [ok]");
+                            Echo($"Add action: {action} ... [ok]");
                         } catch(Exception e) {
                             Chat.PrintError($"Add action failed.");
                             PluginLog.Error($"Exception: {e}");
@@ -137,7 +137,7 @@ namespace GamepadTweaks
                             var action = argv[1];
                             Config.gs.Remove(action);
                             Config.rules.Remove(action);
-                            this.Echo($"Remove action: {action} ... [ok]");
+                            Echo($"Remove action: {action} ... [ok]");
                         } catch(Exception e) {
                             Chat.PrintError($"Remove action failed.");
                             PluginLog.Error($"Exception: {e}");
@@ -156,12 +156,21 @@ namespace GamepadTweaks
             }
         }
 
-        public void Echo(string s)
+        public static bool Ready => ClientState.LocalPlayer is not null;
+        public static PlayerCharacter? Player => ClientState.LocalPlayer;
+
+        public static void Echo(string s)
         {
             Chat.PrintChat(new XivChatEntry() {
                 Message = s,
                 Type = XivChatType.Debug,
             });
+        }
+
+        public static void Send(string s)
+        {
+            PluginLog.Debug($"[Send] {s}");
+            XivCommon.Functions.Chat.SendMessage(s);
         }
 
         public void Error(string s) {
@@ -174,6 +183,8 @@ namespace GamepadTweaks
             if (!disposing) return;
 
             Commands.Dispose();
+
+            Framework.Update -= GamepadActionManager.UpdateFramework;
             GamepadActionManager.Dispose();
 
             Config.Save();

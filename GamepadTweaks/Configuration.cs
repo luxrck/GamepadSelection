@@ -1,11 +1,7 @@
-﻿using Dalamud.Configuration;
-using Dalamud.Plugin;
+using Dalamud.Configuration;
 using Dalamud.Logging;
+using Dalamud.Plugin;
 using Newtonsoft.Json;
-using System;
-using System.IO;
-using System.Linq;
-using System.Collections.Generic;
 
 namespace GamepadTweaks
 {
@@ -35,6 +31,10 @@ namespace GamepadTweaks
         [JsonProperty]
         public bool autoTargeting { get; set; } = false;
         [JsonProperty]
+        public bool blockingAction { get; set; } = false;
+        [JsonProperty]
+        public bool alwaysTargetingNearestEnemy { get; set; } = false;
+        [JsonProperty]
         public List<string> gtoff { get; set; } = new List<string>();
         [JsonProperty]
         public List<string> gs { get; set; } = new List<string>();
@@ -53,14 +53,14 @@ namespace GamepadTweaks
 
         // public Dictionary<string, uint> actions;
         public ActionMap Actions = new ActionMap();
-        public ComboManager ComboManager;
+        public ComboManager ComboManager = null!;
 
         internal DirectoryInfo root;
         internal string configFile;
         internal string fontFile;
         internal string assetFile;
 
-        internal string content;
+        internal string content = String.Empty;
 
         private HashSet<uint> gsActions = new HashSet<uint>();
         private HashSet<uint> gtoffActions = new HashSet<uint>();
@@ -69,7 +69,7 @@ namespace GamepadTweaks
         public Configuration()
         {
             DalamudPluginInterface PluginInterface = Plugin.PluginInterface;
-            
+
             this.root = PluginInterface.ConfigDirectory;
             var cd = this.root.ToString();
             this.configFile = cd + $"/{PluginInterface.ConfigFile.Name}";
@@ -82,17 +82,15 @@ namespace GamepadTweaks
                 PluginLog.Error($"Exception: {e}");
             }
         }
-        
+
         public static Configuration Load()
         {
-            Configuration config = null;
-            
+            Configuration? config = null;
+
             try {
                 var configFile = Plugin.PluginInterface.ConfigDirectory.ToString() + $"/{Plugin.PluginInterface.ConfigFile.Name}";
                 var content = File.ReadAllText(configFile);
-                config = JsonConvert.DeserializeObject<Configuration>(content);
-                if (config is null)
-                    config = new Configuration();
+                config = JsonConvert.DeserializeObject<Configuration>(content) ?? new Configuration();
                 config.content = content;
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
@@ -114,7 +112,7 @@ namespace GamepadTweaks
         public string SelectOrder(uint actionID) => IsUserAction(actionID) ? this.userActions[actionID] : this.priority;
 
         public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.ComboManager.Current(groupID, lastComboAction, comboTimer);
-        public bool UpdateComboState(uint actionID, ActionStatus status = ActionStatus.Done) => this.ComboManager.StateUpdate(actionID, status);
+        public async Task<bool> UpdateComboState(uint actionID, ActionStatus status = ActionStatus.Ready) => await this.ComboManager.StateUpdate(actionID, status);
 
         public bool Update(string content = "")
         {
@@ -122,9 +120,9 @@ namespace GamepadTweaks
                 if (content is null || content == "") {
                     using (var fs = File.Create(this.configFile))
                     using (var sw = new StreamWriter(fs))
-                    using (var jw = new JsonTextWriter(sw) { 
-                        Formatting = Formatting.Indented, 
-                        Indentation = 1, 
+                    using (var jw = new JsonTextWriter(sw) {
+                        Formatting = Formatting.Indented,
+                        Indentation = 1,
                         IndentChar = '\t'
                     }) {
                         (new JsonSerializer()).Serialize(jw, this);
@@ -133,11 +131,13 @@ namespace GamepadTweaks
                     this.content = File.ReadAllText(this.configFile);
                 } else {
                     var config = JsonConvert.DeserializeObject<Configuration>(content);
-                    
+
                     if (config is null) return false;
-                    
+
                     this.alwaysInParty = config.alwaysInParty;
                     this.autoTargeting = config.autoTargeting;
+                    this.blockingAction = config.blockingAction;
+                    this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
                     this.gs = config.gs;
                     this.gtoff = config.gtoff;
                     this.priority = config.priority;
@@ -146,13 +146,13 @@ namespace GamepadTweaks
 
                     this.content = content;
                 }
-                
+
                 return this.UpdateActions();
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
-                
+
                 return false;
-            }   
+            }
         }
 
         private bool UpdateActions()
@@ -184,7 +184,7 @@ namespace GamepadTweaks
                             actionID = UInt32.Parse(i.Key);
                         } catch {}
                     }
-                    
+
                     if (actionID > 0) {
                         var value = i.Value == "" || i.Value.ToLower() == "default" ? this.priority : i.Value;
                         ua.TryAdd(actionID, value);

@@ -1,17 +1,16 @@
-﻿using Dalamud.Game.Command;
-using GamepadTweaks.Attributes;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
+using Dalamud.Game.Command;
 using static Dalamud.Game.Command.CommandInfo;
+using Dalamud.Logging;
+using System.Reflection;
+
+using GamepadTweaks.Attributes;
 
 namespace GamepadTweaks
 {
     public class PluginCommandManager<THost> : IDisposable
     {
         private readonly CommandManager commandManager;
-        private readonly (string, CommandInfo)[] pluginCommands;
+        private readonly (string, CommandInfo)[] pluginCommands = null!;
         private readonly THost host;
 
         public PluginCommandManager(THost host, CommandManager commandManager)
@@ -19,14 +18,23 @@ namespace GamepadTweaks
             this.commandManager = commandManager;
             this.host = host;
 
-            this.pluginCommands = host.GetType().GetMethods(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)
-                .Where(method => method.GetCustomAttribute<CommandAttribute>() != null)
-                .SelectMany(GetCommandInfoTuple)
-                .ToArray();
+            try {
+                this.pluginCommands = host!.GetType().GetMethods(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)
+                    .Where(method => method.GetCustomAttribute<CommandAttribute>() != null)
+                    .SelectMany(GetCommandInfoTuple)
+                    .ToArray();
+            } catch(Exception e) {
+                PluginLog.Error($"Exception: {e}");
+            }
 
             AddCommandHandlers();
         }
-        
+
+        public bool ProcessCommand(string command)
+        {
+            return this.commandManager.ProcessCommand(command);
+        }
+
         private void AddCommandHandlers()
         {
             foreach (var (command, commandInfo) in this.pluginCommands)

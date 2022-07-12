@@ -1,4 +1,4 @@
-﻿using Dalamud.Interface.Windowing;
+using Dalamud.Interface.Windowing;
 using Dalamud.Logging;
 using Newtonsoft.Json;
 using ImGuiNET;
@@ -40,11 +40,11 @@ namespace GamepadTweaks
                                      1000,
                                      new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 100),
                                      ImGuiInputTextFlags.AllowTabInput);
-            
+
             // if (this.font.HasValue) {
             //     ImGui.PopFont();
             // }
-            
+
             if (this.errorMessage != "") {
                 if (ImGui.BeginPopupModal("Error")) {
                     ImGui.TextColored(new Vector4(255, 0, 0, 255), $"{this.errorMessage}");
@@ -54,7 +54,7 @@ namespace GamepadTweaks
                     ImGui.EndPopup();
                 }
             }
-            
+
             if (ImGui.Button("Save")) {
                 this.Save();
             }

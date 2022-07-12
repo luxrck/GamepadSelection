@@ -5,9 +5,3 @@ dalamud_api_level: 5
 repo_url: https://github.com/luxrck/GamepadTweaks.git
 description: |-
   Gamepad tweaks for ffxiv.
-  
-  Include:
-   1. Gamepad Selection. which using "y/b/a/x" and Dpad "up/right/down/left" buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.
-   2. <gtoff> like casting type support.
-   3. Auto targeting the nearest enemy when casting actions.
-   4. Combo support.
