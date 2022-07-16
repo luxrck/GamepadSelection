@@ -23,7 +23,7 @@ namespace GamepadTweaks
         public IntPtr ActionManager = IntPtr.Zero;
         public ActionType Type = ActionType.Spell;
         public uint ID;
-        public uint TargetID = GamepadActionManager.DefaultInvalidGameObjectID;
+        public uint TargetID = Configuration.DefaultInvalidGameObjectID;
         public uint param = 0;
 
         // 0 : normal
@@ -35,7 +35,7 @@ namespace GamepadTweaks
         public ActionStatus Status = ActionStatus.Ready;
         public DateTime DelayTo = DateTime.Now;
 
-        public bool Targeted => TargetID != GamepadActionManager.DefaultInvalidGameObjectID;
+        public bool Targeted => TargetID != Configuration.DefaultInvalidGameObjectID;
 
         public bool IsValid => this.ID > 0;
     }
@@ -66,8 +66,6 @@ namespace GamepadTweaks
 
     class GamepadActionManager : IDisposable
     {
-        public static uint DefaultInvalidGameObjectID = 3758096384U;
-
         public static Dictionary<string, ushort> ButtonMap = new Dictionary<string, ushort> {
             {"up", (ushort)GamepadButtons.DpadUp},
             {"down", (ushort)GamepadButtons.DpadDown},
@@ -139,6 +137,7 @@ namespace GamepadTweaks
         public void UpdateFramework(Framework framework) {
             if (!Plugin.Ready) return;
 
+            // macro
             Task.Run(async () => {
                 var suc = this.pendingActions.Reader.TryRead(out var m);
 
@@ -186,7 +185,6 @@ namespace GamepadTweaks
                     if (ret) {
                         this.lastTime = DateTime.Now;
                         this.lastActionID = m.ID;
-                        //
                         var status = ActionStatus.Ready;
                         this.executedActions.Writer.TryWrite((m.ID, status));
                     }
@@ -197,15 +195,24 @@ namespace GamepadTweaks
                 this.actionLock.Release();
             });
 
+            // combo
             Task.Run(async () => {
-                if (this.executedActions.Reader.TryRead(out (uint ID, ActionStatus Status) a)) {
-                    var adjusted = Actions.AdjustedActionID(a.ID);
+                if (!Plugin.Ready) return;
 
-                    if (Config.IsComboAction(a.ID)) {
-                        await Config.UpdateComboState(a.ID, a.Status);
-                    } else if (Config.IsComboAction(adjusted)) {
-                        await Config.UpdateComboState(adjusted, a.Status);
+                try {
+                    if (this.executedActions.Reader.TryRead(out (uint ID, ActionStatus Status) a)) {
+                        var adjusted = Actions.AdjustedActionID(a.ID);
+
+                        if (Config.IsComboAction(a.ID)) {
+                            await Config.UpdateComboState(a.ID, a.Status);
+                        } else if (Config.IsComboAction(adjusted)) {
+                            await Config.UpdateComboState(adjusted, a.Status);
+                        }
+                    } else {
+                        await Config.UpdateComboState();
                     }
+                } catch(Exception e) {
+                    PluginLog.Error($"Exception: {e}");
                 }
             });
             // Update combo action icon.
@@ -237,8 +244,8 @@ namespace GamepadTweaks
             bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
 
             var interval = DateTime.Now - this.lastTime;
-            PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} {actionManager} {softTarget ?? target} interval: {interval}, status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
-            PluginLog.Debug($"[Args] AM: {actionManager}, AT: {actionType}, ID: {actionID}, TID: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
+            // PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} {actionManager} {softTarget ?? target} interval: {interval}, status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
+            // PluginLog.Debug($"[Args] AM: {actionManager}, AT: {actionType}, ID: {actionID}, TID: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
 
             // if (interval.TotalMilliseconds < 30) {
             //     // Task.Run(async () => {
@@ -455,7 +462,7 @@ namespace GamepadTweaks
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                         this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        PluginLog.Debug($"[{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
+                        // PluginLog.Debug($"[{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
                     }
 
                     this.state = GamepadActionManagerState.Start;
@@ -718,7 +725,7 @@ namespace GamepadTweaks
             var recast = Actions.RecastTimeRemain(actionID);
             // 不需要等到下一个gcd开始...No
             // if (lgroup == cgroup) recast -= 0.4f;
-            if (recast > 2.6) recast = 2.6f;
+            if (recast > Configuration.GlobalCoolingDown.TotalSeconds) recast = Configuration.GlobalCoolingDown.TotalSeconds;
 
             remainMs = Math.Max((int)(recast * 1000), remain) + 10;
 

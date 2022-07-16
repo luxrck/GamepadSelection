@@ -49,6 +49,7 @@ namespace GamepadTweaks
             {25822, new uint[] {3582} },   // 星极超流
             {3579,  new uint[] {25820} },   // 毁荡
             {25883, new uint[] {25819, 25818, 25817} },    // 宝石耀
+            {25884, new uint[] {25816, 25815, 25814} },    // 宝石辉
         };
 
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
@@ -135,16 +136,23 @@ namespace GamepadTweaks
             {("zh", "星极脉冲", 25820)},
             {("zh", "星极超流", 25822)},
             {("zh", "宝石耀", 25883)},
+            {("zh", "宝石辉", 25884)},
             {("zh", "风神召唤", 25807)},
             {("zh", "土神召唤", 25806)},
             {("zh", "火神召唤", 25805)},
             {("zh", "毁荡", 3579)},
             {("zh", "能量吸收", 16508)},
+            {("zh", "能量抽取", 16510)},
+            {("zh", "迸裂", 16511)},
             {("zh", "龙神迸发", 7429)},
             {("zh", "溃烂爆发", 181)},
+            {("zh", "痛苦核爆", 3578)},
             {("zh", "绿宝石毁荡", 25819)},
             {("zh", "黄宝石毁荡", 25818)},
             {("zh", "红宝石毁荡", 25817)},
+            {("zh", "绿宝石迸裂", 25816)},
+            {("zh", "黄宝石迸裂", 25815)},
+            {("zh", "红宝石迸裂", 25814)},
         };
 
         private Dictionary<uint, Dictionary<string, string>> ActionsMap = new Dictionary<uint, Dictionary<string, string>>();

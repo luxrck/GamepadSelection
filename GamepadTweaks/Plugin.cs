@@ -36,6 +36,7 @@ namespace GamepadTweaks
         public static PluginCommandManager<Plugin> Commands { get; private set; } = null!;
 
         public string Name => "Gamepad Tweaks (for Healers)";
+        public ActionMap Actions = new ActionMap();
 
         private PluginWindow Window { get; set; }
         private WindowSystem WindowSystem { get; set; }
@@ -68,6 +69,7 @@ namespace GamepadTweaks
 /gt info → Show gt info.
 /gt add <action> [<selectOrder>] → Add specific <action> in monitor.
 /gt remove <action> → Remove specific monitored <action>.
+/gt reset [<action>] → Reset combo index for given group.
 
 <action>        Action name (in string).
 <selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons (Xbox)).")]
@@ -84,10 +86,12 @@ namespace GamepadTweaks
                     case "on":
                         Echo("[GamepadTweaks] Enabled.");
                         GamepadActionManager.Enable();
+                        Chat.UpdateQueue();
                         break;
                     case "off":
                         Echo("[GamepadTweaks] Disabled.");
                         GamepadActionManager.Disable();
+                        Chat.UpdateQueue();
                         break;
                     case "info":
                         string bs(bool x) => x ? "●" : "○";
@@ -107,6 +111,7 @@ namespace GamepadTweaks
         {a.Value}");
                         }
                         Echo("====== [E GamepadTweaks] ======");
+                        Chat.UpdateQueue();
                         break;
                     case "add":
                         try {
@@ -131,6 +136,7 @@ namespace GamepadTweaks
                             Chat.PrintError($"Add action failed.");
                             PluginLog.Error($"Exception: {e}");
                         }
+                        Chat.UpdateQueue();
                         break;
                     case "remove":
                         try {
@@ -142,7 +148,15 @@ namespace GamepadTweaks
                             Chat.PrintError($"Remove action failed.");
                             PluginLog.Error($"Exception: {e}");
                         }
+                        Chat.UpdateQueue();
                         break;
+                    case "reset":
+                        uint groupID = 0;
+                        if (argv.Count > 1) {
+                            groupID = Actions[argv[1].Trim()];
+                        }
+                        Config.ResetComboState(groupID);
+                        return;
                     default:
                         break;
                 }
@@ -152,7 +166,6 @@ namespace GamepadTweaks
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");
                 }
-                Chat.UpdateQueue();
             }
         }
 

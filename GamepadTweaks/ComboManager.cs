@@ -29,21 +29,49 @@ namespace GamepadTweaks
         StrictBlocked = 6,
         // p : like macro
         Priority = 7,
+        Oscript = 8,
+    }
+
+    public enum ComboActionType : int
+    {
+        // none
+        Single = 0,
+        // +
+        Multiple = 1,
+        // ?
+        Skipable = 2,
+        // *
+        Key = 3,
+        // !
+        Blocking = 4,
+        Ability = 5,
+    }
+
+    public class ComboAction
+    {
+        public uint ID = 0;
+        public ComboActionType Type = ComboActionType.Single;
+        public int MinimumCount = 1;
+        public int MaximumCount = 1;
+        public int Count = 0;
+        public bool Executed = false;
+        public void Restore() { Count = 0; Executed = false; }
     }
 
     public class ComboGroup
     {
         public uint GroupID;
         public int CurrentIndex;
-        public List<uint> ComboActions;
+        public List<ComboAction> ComboActions;
         public ComboType Type;
 
         public ActionMap Actions = new ActionMap();
 
         private TargetManager TargetManager = Plugin.TargetManager;
-        private Dictionary<uint, int> ActionPos = new Dictionary<uint, int>();
 
-        public ComboGroup(uint id, List<uint> actions, string ctype = "l")
+        private SemaphoreSlim actionLock = new SemaphoreSlim(1, 1);
+
+        public ComboGroup(uint id, List<ComboAction> actions, string ctype = "l")
         {
             GroupID = id;
             CurrentIndex = 0;
@@ -62,22 +90,19 @@ namespace GamepadTweaks
                     Type = ComboType.LinearBlocked; break;
                 case "sb":
                     Type = ComboType.StrictBlocked; break;
+                case "o":
+                    Type = ComboType.Oscript; break;
                 case "p":
                     Type = ComboType.Priority; break;
                 default:
                     Type = ComboType.Linear; break;
             }
             ComboActions = actions;
-
-            if (Type != ComboType.Strict)
-                for (var i=0; i<actions.Count; i++) {
-                    ActionPos.Add(actions[i], i);
-                }
         }
 
         public uint Current(uint lastComboAction = 0, float comboTimer = 0f)
         {
-            return ComboActions[CurrentIndex];
+            return ComboActions[CurrentIndex].ID;
             // PluginLog.Debug($"{lastComboAction} {comboTimer}");
             // if (lastComboAction == 0 || comboTimer <= 0) {
             //     return ComboActions[CurrentIndex];
@@ -89,9 +114,17 @@ namespace GamepadTweaks
             // return actionID;
         }
 
-        public bool Contains(uint actionID) => ComboActions.Contains(actionID);
+        public bool Contains(uint actionID) => ComboActions.Any(x => x.ID == actionID);
+
+        public void StateReset() => CurrentIndex = 0;
+
         public async Task<bool> StateUpdate(uint actionID, ActionStatus status = ActionStatus.Ready)
         {
+            if (status != ActionStatus.Ready && status != ActionStatus.Pending && status != ActionStatus.NotSatisfied && status != ActionStatus.NotLearned)
+                return true;
+
+            await this.actionLock.WaitAsync();
+
             // 1 -> 2 -> 3 : 1
             // 1 -> 2 : 2
             var baseActionID = Actions.BaseActionID(actionID);
@@ -105,113 +138,155 @@ namespace GamepadTweaks
             //     index = ComboActions.IndexOf(actionID);
             // }
 
-            var index = ComboActions.FindIndex(CurrentIndex, x => Actions.Equals(x, actionID));
+            var index = ComboActions.FindIndex(CurrentIndex, x => Actions.Equals(x.ID, actionID));
             if (index == -1)
-                index = ComboActions.FindIndex(0, x => Actions.Equals(x, actionID));
+                index = ComboActions.FindIndex(0, x => Actions.Equals(x.ID, actionID));
 
-            if (index == -1) return false;
+            // *a1 -> a2 -> a3 -> a1 -> a4
+            // task1 : Update(a1) -> Lock -> DoSomething -> Wait(500ms) -> CurrentIndex++ -> Unlock
+            // task2 :      |-> Update(a1) -> Wait Lock -> Lock -> DoSomething -> ...
+            //
+            if (index == -1 && Type != ComboType.Oscript) {
+                this.actionLock.Release();
+                return false;
+            }
 
             var rgroup = Actions.RecastGroup(actionID);
             var recast = Actions.RecastTimeRemain(actionID);
 
-            PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, index: {index}, baseAction: {baseActionID} action: {actionID}, rgroup: {rgroup} status: {status} remain: {recast}");
+            // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, index: {index}, baseAction: {baseActionID} action: {actionID}, rgroup: {rgroup} status: {status} remain: {recast}");
 
-            int offset = 0;
+            int animationDelay = 350;
+            var originalIndex = index;
             switch (Type)
             {
                 case ComboType.Manual:
                     index = (index + 1) % ComboActions.Count;
                     break;
                 case ComboType.Strict:
-                case ComboType.StrictBlocked:
-                    index = CurrentIndex;
-                    PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
-                    if (!Actions.Equals(ComboActions[CurrentIndex], actionID))
+                    if (!Actions.Equals(ComboActions[CurrentIndex].ID, actionID))
                         break;
                     if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
-                    } else if (Type == ComboType.StrictBlocked && recast > 2.6) {    // gcd == ~2.5, 设3为了防止到能力技(cd一般>=3)时卡住.
+                    } else if (recast > Configuration.GlobalCoolingDown.TotalSeconds) {
+                        index = (CurrentIndex + 1) % ComboActions.Count;
+                    }
+                    break;
+                case ComboType.StrictBlocked:
+                    index = CurrentIndex;
+                    // PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
+                    if (!Actions.Equals(ComboActions[CurrentIndex].ID, actionID))
+                        break;
+                    if ((status == ActionStatus.Ready || status == ActionStatus.NotLearned)) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
                     }
                     break;
                 case ComboType.Linear:
-                case ComboType.LinearBlocked:
-                    PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
+                    // PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
                     if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
                         index = (index + 1) % ComboActions.Count;
-                    } else if (Type == ComboType.Linear && recast > 2.6) {
+                    } else if (Type == ComboType.Linear && recast > Configuration.GlobalCoolingDown.TotalSeconds) {
                         index = (index + 1) % ComboActions.Count;
                     }
                     break;
-                case ComboType.LinearWithSkip:
-                    // 同组技能不能跳过
-                    // 如果能力技在cd, 可以跳过能力技
-                    offset = 1;
-                    for (; offset<ComboActions.Count; offset++) {
-                        var naction = ComboActions[(index+offset)%ComboActions.Count];
-                        var nstatus = Actions.ActionStatus(naction);
-                        var nrgroup = Actions.RecastGroup(naction);
-                        var nrecast = Actions.RecastTimeRemain(naction);
-                        PluginLog.Debug($"{index} {offset} {naction} {nrgroup} {nstatus} {nrecast}");
-
-                        // a1 b1 a2 *a3 : 不可跳过a1
-                        // *a1 b1 a2 a3 : 可以跳过b1, 限制: a1(链首)必须执行完!.
-                        // a1 *b1 a2 a3 : a1 a2 a3都没ready, 则index+1
-                        if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
-                            if (nrgroup == rgroup) {
-                                index = (index + offset) % ComboActions.Count;
-                                break;
-                            } else {
-                                if (nstatus == ActionStatus.Ready || nstatus == ActionStatus.Pending && nrecast <= 2.6) {
-                                    index = (index + offset) % ComboActions.Count;
-                                    break;
-                                }
-                            }
-                        } else if (recast > 2.6) {
-                            index = (index + 1) % ComboActions.Count;
-                            break;
-                        }
-                    }
-
-                    if (offset == ComboActions.Count)
+                case ComboType.LinearBlocked:
+                    // PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
+                    if ((status == ActionStatus.Ready || status == ActionStatus.NotLearned)) {
                         index = (index + 1) % ComboActions.Count;
-
+                    }
                     break;
-                case ComboType.StrictWithSkip:
-                    PluginLog.Debug($"[StrictWithSkip] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
-                    if (!Actions.Equals(ComboActions[CurrentIndex], actionID))
-                        break;
-                    index = CurrentIndex;
-                    offset = 1;
-                    for (; offset<ComboActions.Count; offset++) {
-                        var naction = ComboActions[(index+offset)%ComboActions.Count];
-                        var nstatus = Actions.ActionStatus(naction);
-                        var nrgroup = Actions.RecastGroup(naction);
-                        var nrecast = Actions.RecastTimeRemain(naction);
-                        PluginLog.Debug($"{index} {offset} {naction} {nrgroup} {nstatus} {nrecast}");
+                case ComboType.Oscript:
+                    // 毁荡* -> 龙神附体 -> 星极超流 -> 火神召唤 -> [宝石耀, 宝石辉] -> 风神召唤 -> [宝石耀, 宝石辉] -> 土神召唤 -> [宝石耀, 宝石辉] -> 龙神迸发
+                    // o : 毁荡* -> 龙神附体! -> 星极超流 -> 火神召唤 -> 宝石耀{2} -> 风神召唤 -> 宝石耀{4} -> 土神召唤 -> 宝石耀{4} -> 龙神迸发 : 宝石耀
+                    // 迸裂* -> 龙神附体 -> 星极超流 -> 火神召唤 -> 宝石辉+ -> 风神召唤 -> 宝石辉+ -> 土神召唤 -> 宝石辉+ -> 龙神迸发
+                    // 重劈 -> 下踢? -> 凶残裂 -> 暴风斩
+                    // 抽卡! -> 出卡
 
-                        // a1 b1 a2 *a3 : 不可跳过a1
-                        // *a1 b1 a2 a3 : 可以跳过b1, 限制: a1(链首)必须执行完!.
-                        // a1 *b1 a2 a3 : a1 a2 a3都没ready, 则index+1
-                        if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
-                            if (nrgroup == rgroup) {
-                                index = (index + offset) % ComboActions.Count;
-                                break;
-                            } else {
-                                if (nstatus == ActionStatus.Ready || nstatus == ActionStatus.Pending && nrecast <= 2.6) {
-                                    index = (index + offset) % ComboActions.Count;
-                                    break;
-                                }
-                            }
-                        } else if (recast > 2.6) {
-                            index = (index + 1) % ComboActions.Count;
-                            break;
-                        }
+                    // *: Key Action
+                    // +: 1 or more times
+                    // ?: Skip if not avaliable
+                    // !: Wait for this action
+                    var caction = ComboActions[(index == -1 ? CurrentIndex : index) % ComboActions.Count];
+                    var cadjust = Actions.AdjustedActionID(caction.ID);
+                    var cstatus = index == -1 ? Actions.ActionStatus(cadjust) : status;
+                    var crgroup = Actions.RecastGroup(cadjust);
+                    var cremain = Actions.RecastTimeRemain(cadjust);
+
+                    if (cstatus == ActionStatus.NotLearned) {
+                        CurrentIndex = (CurrentIndex + 1) % ComboActions.Count;
+                        this.actionLock.Release();
+                        return true;
                     }
 
-                    if (offset == ComboActions.Count)
-                        index = (index + 1) % ComboActions.Count;
+                    // 刚才调用的是其它组的Action
+                    if (index == -1) {
+                        index = CurrentIndex;
 
+                        switch (caction.Type)
+                        {
+                            case ComboActionType.Key:
+                            case ComboActionType.Single:
+                                if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                                    index += 1;
+                                }
+                                break;
+                            case ComboActionType.Multiple:
+                                if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds || caction.Executed && cstatus == ActionStatus.NotSatisfied) {
+                                    index += 1; caction.Restore();
+                                }
+                                break;
+                            case ComboActionType.Skipable:
+                                if (cstatus == ActionStatus.NotSatisfied || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                                    index += 1;
+                                }
+                                break;
+                        }
+
+                        animationDelay = 0;
+                    } else {
+                        if (cstatus != ActionStatus.Ready && cstatus != ActionStatus.Pending && cstatus != ActionStatus.NotSatisfied)
+                            break;
+
+                        switch (caction.Type)
+                        {
+                            case ComboActionType.Key:
+                            case ComboActionType.Single:
+                            case ComboActionType.Multiple:
+                                if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                                    index += 1;
+                                } else if (cstatus == ActionStatus.Ready) {
+                                    caction.Count += 1; caction.Executed = true;
+                                    if (caction.Count >= caction.MaximumCount) {
+                                        index += 1; caction.Restore();
+                                    } else if (caction.Count >= caction.MinimumCount) {
+                                        var naction = ComboActions[(index+1)%ComboActions.Count];
+                                        var nadjust = Actions.AdjustedActionID(naction.ID);
+                                        var nstatus = Actions.ActionStatus(nadjust);
+                                        var nrgroup = Actions.RecastGroup(nadjust);
+                                        var nremain = Actions.RecastTimeRemain(nadjust);
+                                        if (nstatus == ActionStatus.Ready || nrgroup == crgroup || nstatus == ActionStatus.Pending && nremain <= Configuration.GlobalCoolingDown.TotalSeconds) {
+                                            index += 1; caction.Restore();
+                                        }
+                                    }
+                                } else if (caction.Executed && cstatus == ActionStatus.NotSatisfied) {
+                                    index += 1; caction.Restore(); animationDelay = 0;
+                                }
+                                break;
+                            case ComboActionType.Skipable:
+                                if (cstatus == ActionStatus.Ready || cstatus == ActionStatus.NotSatisfied || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                                    index += 1;
+                                }
+                                break;
+                            case ComboActionType.Blocking:  // Pending ?
+                                if (cstatus == ActionStatus.Ready) {
+                                    index += 1;
+                                }
+                                break;
+                        }
+                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {Actions[caction.ID]} {caction.Count}, status: {cstatus}, type: {caction.Type} , crgroup: {crgroup}, remain: {cremain}");
+                        // animationDelay = 500;
+                    }
+                    // caction.LastTime = DateTime.Now;
                     break;
                 case ComboType.Priority:
                     // TODO
@@ -221,12 +296,13 @@ namespace GamepadTweaks
                     break;
             }
 
-            if (CurrentIndex != index) {
+            if (originalIndex != index) {
                 // 反正能力技之间的插入也有时间间隔, 不如等一等, 放动画
-                await Task.Delay(500);
-                PluginLog.Debug($"{index} {CurrentIndex}");
-                CurrentIndex = index;
+                await Task.Delay(animationDelay);
+                CurrentIndex = index % ComboActions.Count;
             }
+
+            this.actionLock.Release();
 
             return true;
         }
@@ -237,7 +313,7 @@ namespace GamepadTweaks
         public Dictionary<uint, ComboGroup> ComboGroups = new Dictionary<uint, ComboGroup>();
         public ActionMap Actions = new ActionMap();
 
-        public ComboManager(List<(uint, List<uint>, string)> actions)
+        public ComboManager(List<(uint, List<ComboAction>, string)> actions)
         {
             foreach (var (groupID, comboActions, comboType) in actions) {
                 // var groupID = i.Key;
@@ -247,16 +323,26 @@ namespace GamepadTweaks
             }
         }
 
+        public void StateReset(uint groupID = 0)
+        {
+            if (groupID == 0) {
+                foreach (var i in ComboGroups) {
+                    i.Value.StateReset();
+                }
+            } else if (ComboGroups.ContainsKey(groupID)) {
+                ComboGroups[groupID].StateReset();
+            }
+        }
+
         public async Task<bool> StateUpdate(uint actionID, ActionStatus status = ActionStatus.Ready)
         {
-            bool flag = false;
-            foreach (var i in ComboGroups) {
-                var combo = i.Value;
-                var ret = await combo.StateUpdate(actionID, status);
-                if (ret)
-                    flag = ret;
-            }
-            return flag;
+            return (await Task.WhenAll(ComboGroups.Select(i => i.Value.StateUpdate(actionID, status)).ToArray())).Any();
+            // foreach (var i in ComboGroups) {
+            //     var combo = i.Value;
+            //     var ret = await combo.StateUpdate(actionID, status);
+            //     if (ret)
+            //         flag = ret;
+            // }
         }
 
         public uint Current(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => ComboGroups.ContainsKey(groupID) ? ComboGroups[groupID].Current(lastComboAction, comboTimer) : groupID;

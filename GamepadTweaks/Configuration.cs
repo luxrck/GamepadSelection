@@ -2,12 +2,20 @@ using Dalamud.Configuration;
 using Dalamud.Logging;
 using Dalamud.Plugin;
 using Newtonsoft.Json;
+using System.Text.RegularExpressions;
 
 namespace GamepadTweaks
 {
     [JsonObject(MemberSerialization.OptIn)]
     public class Configuration : IPluginConfiguration
     {
+        public static uint DefaultInvalidGameObjectID = 3758096384U;
+        public class GlobalCoolingDown
+        {
+            public static float TotalSeconds => 2.7f;
+            public static uint TotalMilliseconds => 2700;
+        }
+
         int IPluginConfiguration.Version { get; set; }
 
         // public delegate void UpdateContentDelegate(string content);
@@ -112,7 +120,8 @@ namespace GamepadTweaks
         public string SelectOrder(uint actionID) => IsUserAction(actionID) ? this.userActions[actionID] : this.priority;
 
         public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.ComboManager.Current(groupID, lastComboAction, comboTimer);
-        public async Task<bool> UpdateComboState(uint actionID, ActionStatus status = ActionStatus.Ready) => await this.ComboManager.StateUpdate(actionID, status);
+        public void ResetComboState(uint groupID) => this.ComboManager.StateReset(groupID);
+        public async Task<bool> UpdateComboState(uint actionID = 0, ActionStatus status = ActionStatus.Ready) => await this.ComboManager.StateUpdate(actionID, status);
 
         public bool Update(string content = "")
         {
@@ -192,12 +201,57 @@ namespace GamepadTweaks
                 }
                 this.userActions = ua;
 
-                var cg = new List<(uint GroupID, List<uint> ComboActions, string ComboType)>();
+                var cg = new List<(uint GroupID, List<ComboAction> ComboActions, string ComboType)>();
                 foreach (string s in this.combo) {
                     var ss = s.Split(":");
                     var comboType = ss[0].Trim();
-                    var comboActions = ss[1].Split("->").Where(a => a != "").Select(a => Actions[a.Trim()]).ToList();
+                    var comboActions = ss[1].Split("->").Where(a => a != "").Select(a => {
+                        var pattern = new Regex(@"(?<action>[\w\s]+\w)(?<type>[\d\,\{\}\*\!\?]+)?", RegexOptions.Compiled);
+                        var match = pattern.Match(a.Trim());
+                        var action = match.Groups.ContainsKey("action") ? match.Groups["action"].ToString().Trim() : "";
+                        var type = match.Groups.ContainsKey("type") ? match.Groups["type"].ToString().Trim() : "";
+
+                        var comboActionType = ComboActionType.Single;
+                        int minCount = 1;
+                        int maxCount = 1;
+                        switch (type)
+                        {
+                            case "":
+                                comboActionType = ComboActionType.Single; break;
+                            case "*":
+                                comboActionType = ComboActionType.Key; break;
+                            case "?":
+                                comboActionType = ComboActionType.Skipable; break;
+                            case "!":
+                                comboActionType = ComboActionType.Blocking; break;
+                            default:
+                                if (type.StartsWith("{")) {
+                                    comboActionType = ComboActionType.Multiple;
+                                    var tpattern = new Regex(@"(?<mc>\d+)\s*(,\s*(?<uc>\d+))?", RegexOptions.Compiled);
+                                    var tmatch = tpattern.Match(type);
+                                    minCount = Int32.Parse(tmatch.Groups["mc"].ToString());
+                                    if (tmatch.Groups.ContainsKey("uc")) {
+                                        var ucs = tmatch.Groups["uc"].ToString().Trim();
+                                        maxCount = !String.IsNullOrEmpty(ucs) ? Int32.Parse(ucs) : minCount;
+                                    } else {
+                                        maxCount = minCount;
+                                    }
+                                }
+                                break;
+                        }
+                        var id = Actions[action.Trim()];
+
+                        PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount}");
+
+                        return new ComboAction() {
+                            ID = id,
+                            Type = comboActionType,
+                            MinimumCount = minCount,
+                            MaximumCount = maxCount,
+                        };
+                    }).ToList();
                     var groupID = Actions[ss[2].Trim()];
+                    PluginLog.Debug($"{comboType} : {groupID} {ss[2].Trim()}");
                     cg.Add((groupID, comboActions, comboType));
                 }
                 this.ComboManager = new ComboManager(cg);
