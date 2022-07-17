@@ -1,3 +1,4 @@
+using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Logging;
 using Newtonsoft.Json;
@@ -11,39 +12,56 @@ namespace GamepadTweaks
     public class PluginWindow : Window
     {
         private Configuration Config = Plugin.Config;
-        private string errorMessage;
-        // private ImFontPtr? font;
+        private UiBuilder UiBuilder = Plugin.PluginInterface.UiBuilder;
 
-        public PluginWindow() : base("Gamepad Tweaks Settings")
+        private ImFontPtr Font;
+        private bool FontLoaded = false;
+        private string errorMessage = String.Empty;
+
+        public PluginWindow() : base("GamepadTweaks")
         {
-            this.errorMessage = "";
-
             IsOpen = false;
-            Size = new Vector2(800, 600);
+            Size = new Vector2(600, 400);
             SizeCondition = ImGuiCond.FirstUseEver;
             Flags = ImGuiWindowFlags.NoCollapse;
+
+            if (!FontLoaded)
+                UiBuilder.BuildFonts += BuildFont;
+        }
+
+        private void BuildFont()
+        {
+            if (!File.Exists(Config.FontFile))
+                throw new FileNotFoundException($"Font file not found!: {Config.FontFile}");
+
+            try {
+                Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Config.FontFile, 20.0f, null, ImGui.GetIO().Fonts.GetGlyphRangesChineseFull());
+                // Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Config.FontFile, 24.0f);
+                PluginLog.Debug($"Load Monospace Font: {Config.FontFile}");
+            } catch(Exception e) {
+                PluginLog.Error($"Exception: {e}");
+            }
+            FontLoaded = true;
         }
 
         public override void Draw()
         {
             if (!IsOpen) return;
+            if (!FontLoaded) {
+                UiBuilder.RebuildFonts();
+                return;
+            }
 
-            // if (this.font.HasValue) {
-            //     ImGui.PushFont(this.font.Value);
-            // }
+            if (FontLoaded) ImGui.PushFont(Font);
 
-            ImGui.SetNextItemWidth(-1);
-            ImGui.SetNextWindowSizeConstraints(new Vector2(800, 600), new Vector2(float.MaxValue, float.MaxValue));
-
+            ImGui.SetNextWindowSizeConstraints(Size ?? new Vector2(600, -1.0f), new Vector2(float.MaxValue, -1.0f));
             ImGui.InputTextMultiline("",
                                      ref Config.content,
-                                     1000,
-                                     new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 100),
+                                     10000,
+                                     new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - ImGui.GetFrameHeight() - ImGui.GetFontSize() * 2.0f),
                                      ImGuiInputTextFlags.AllowTabInput);
 
-            // if (this.font.HasValue) {
-            //     ImGui.PopFont();
-            // }
+            if (FontLoaded) ImGui.PopFont();
 
             if (this.errorMessage != "") {
                 if (ImGui.BeginPopupModal("Error")) {
@@ -74,7 +92,8 @@ namespace GamepadTweaks
             }
         }
 
-        private bool Save() {
+        private bool Save()
+        {
             PluginLog.Debug($"Update config: {Config.content}");
             if (Config.Update(Config.content)) {
                 Config.Save();
@@ -88,6 +107,11 @@ namespace GamepadTweaks
                 }
                 return false;
             }
+        }
+
+        public void Dispose()
+        {
+            UiBuilder.BuildFonts -= BuildFont;
         }
     }
 }

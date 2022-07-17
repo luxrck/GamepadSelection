@@ -50,6 +50,7 @@ namespace GamepadTweaks
             {3579,  new uint[] {25820} },   // 毁荡
             {25883, new uint[] {25819, 25818, 25817} },    // 宝石耀
             {25884, new uint[] {25816, 25815, 25814} },    // 宝石辉
+            {25800, new uint[] {3581} },    //以太蓄能
         };
 
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
@@ -133,6 +134,7 @@ namespace GamepadTweaks
             // SMN
             {("zh", "龙神附体", 3581)},
             {("zh", "死星核爆", 3582)},
+            {("zh", "以太蓄能", 25800)},
             {("zh", "星极脉冲", 25820)},
             {("zh", "星极超流", 25822)},
             {("zh", "宝石耀", 25883)},

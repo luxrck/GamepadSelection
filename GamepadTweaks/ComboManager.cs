@@ -35,16 +35,18 @@ namespace GamepadTweaks
     public enum ComboActionType : int
     {
         // none
-        Single = 0,
-        // +
-        Multiple = 1,
-        // ?
-        Skipable = 2,
+        Single = 0x01,
+        // {a,b}
+        Multi = 0x02,
         // *
-        Key = 3,
+        Skipable = 0x04,
         // !
-        Blocking = 4,
-        Ability = 5,
+        Blocking = 0x08,
+        Ability = 0x10,
+        // ?
+        SingleSkipable = Single | Skipable,
+        // {a,b}?
+        MultiSkipable = Multi | Skipable,
     }
 
     public class ComboAction
@@ -156,7 +158,7 @@ namespace GamepadTweaks
 
             // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, index: {index}, baseAction: {baseActionID} action: {actionID}, rgroup: {rgroup} status: {status} remain: {recast}");
 
-            int animationDelay = 350;
+            int animationDelay = 500;
             var originalIndex = index;
             switch (Type)
             {
@@ -196,16 +198,6 @@ namespace GamepadTweaks
                     }
                     break;
                 case ComboType.Oscript:
-                    // 毁荡* -> 龙神附体 -> 星极超流 -> 火神召唤 -> [宝石耀, 宝石辉] -> 风神召唤 -> [宝石耀, 宝石辉] -> 土神召唤 -> [宝石耀, 宝石辉] -> 龙神迸发
-                    // o : 毁荡* -> 龙神附体! -> 星极超流 -> 火神召唤 -> 宝石耀{2} -> 风神召唤 -> 宝石耀{4} -> 土神召唤 -> 宝石耀{4} -> 龙神迸发 : 宝石耀
-                    // 迸裂* -> 龙神附体 -> 星极超流 -> 火神召唤 -> 宝石辉+ -> 风神召唤 -> 宝石辉+ -> 土神召唤 -> 宝石辉+ -> 龙神迸发
-                    // 重劈 -> 下踢? -> 凶残裂 -> 暴风斩
-                    // 抽卡! -> 出卡
-
-                    // *: Key Action
-                    // +: 1 or more times
-                    // ?: Skip if not avaliable
-                    // !: Wait for this action
                     var caction = ComboActions[(index == -1 ? CurrentIndex : index) % ComboActions.Count];
                     var cadjust = Actions.AdjustedActionID(caction.ID);
                     var cstatus = index == -1 ? Actions.ActionStatus(cadjust) : status;
@@ -224,17 +216,14 @@ namespace GamepadTweaks
 
                         switch (caction.Type)
                         {
-                            case ComboActionType.Key:
-                            case ComboActionType.Single:
-                                if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
-                                    index += 1;
-                                }
-                                break;
-                            case ComboActionType.Multiple:
-                                if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds || caction.Executed && cstatus == ActionStatus.NotSatisfied) {
+                            // 跳NotSatisfied需要确保action已经执行
+                            case ComboActionType.SingleSkipable:
+                            case ComboActionType.MultiSkipable:
+                                if (cstatus == ActionStatus.NotSatisfied && caction.Executed || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                                     index += 1; caction.Restore();
                                 }
                                 break;
+                            // 全跳
                             case ComboActionType.Skipable:
                                 if (cstatus == ActionStatus.NotSatisfied || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                                     index += 1;
@@ -249,9 +238,11 @@ namespace GamepadTweaks
 
                         switch (caction.Type)
                         {
-                            case ComboActionType.Key:
+                            case ComboActionType.Skipable:
                             case ComboActionType.Single:
-                            case ComboActionType.Multiple:
+                            case ComboActionType.SingleSkipable:
+                            case ComboActionType.Multi:
+                            case ComboActionType.MultiSkipable:
                                 if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                                     index += 1;
                                 } else if (cstatus == ActionStatus.Ready) {
@@ -268,13 +259,16 @@ namespace GamepadTweaks
                                             index += 1; caction.Restore();
                                         }
                                     }
-                                } else if (caction.Executed && cstatus == ActionStatus.NotSatisfied) {
-                                    index += 1; caction.Restore(); animationDelay = 0;
-                                }
-                                break;
-                            case ComboActionType.Skipable:
-                                if (cstatus == ActionStatus.Ready || cstatus == ActionStatus.NotSatisfied || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
-                                    index += 1;
+                                } else if (cstatus == ActionStatus.NotSatisfied) {
+                                    if (caction.Type == ComboActionType.Single || caction.Type == ComboActionType.Multi) {
+                                        if (caction.Executed) {
+                                            index += 1; caction.Restore(); animationDelay = 0;
+                                        } else {
+                                            caction.Executed = true;    // <---- 防止卡住. 点两次
+                                        }
+                                    } else if (caction.Type == ComboActionType.SingleSkipable || caction.Type == ComboActionType.MultiSkipable || caction.Type == ComboActionType.Skipable) {
+                                        index += 1; caction.Restore(); animationDelay = 0;  // 点一次
+                                    }
                                 }
                                 break;
                             case ComboActionType.Blocking:  // Pending ?
@@ -283,7 +277,7 @@ namespace GamepadTweaks
                                 }
                                 break;
                         }
-                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {Actions[caction.ID]} {caction.Count}, status: {cstatus}, type: {caction.Type} , crgroup: {crgroup}, remain: {cremain}");
+                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {Actions[caction.ID]} {caction.Executed}, status: {cstatus}, type: {caction.Type} , crgroup: {crgroup}, remain: {cremain}");
                         // animationDelay = 500;
                     }
                     // caction.LastTime = DateTime.Now;

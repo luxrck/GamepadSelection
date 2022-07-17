@@ -87,6 +87,9 @@ namespace GamepadTweaks
 
         public GamepadActionManagerState state = GamepadActionManagerState.Start;
         public bool inGamepadSelectionMode = false;
+        public Channel<GameAction> LastAction = Channel.CreateBounded<GameAction>(new BoundedChannelOptions(1) {
+            FullMode = BoundedChannelFullMode.DropOldest
+        });
 
         private Channel<(uint, ActionStatus)> executedActions = Channel.CreateUnbounded<(uint, ActionStatus)>();
         private Channel<GameAction> pendingActions = Channel.CreateUnbounded<GameAction>();
@@ -185,6 +188,7 @@ namespace GamepadTweaks
                     if (ret) {
                         this.lastTime = DateTime.Now;
                         this.lastActionID = m.ID;
+                        this.LastAction.Writer.TryWrite(m);
                         var status = ActionStatus.Ready;
                         this.executedActions.Writer.TryWrite((m.ID, status));
                     }
@@ -226,7 +230,6 @@ namespace GamepadTweaks
         {
             if (!Plugin.Ready) return false;
 
-            var a = new GameAction();
             bool ret = false;
 
             // original slot action which combo-chains place at. (ComboGroup)
@@ -238,14 +241,25 @@ namespace GamepadTweaks
             // update real base actionID using adjustedID
             actionID = Actions.BaseActionID(adjustedID);
 
+            var a = new GameAction() {
+                ActionManager = actionManager,
+                Type = (ActionType)actionType,
+                ID = adjustedID,
+                TargetID = targetedActorID,
+                UseType = useType,
+                param = param,
+                pvp = pvp,
+                a8 = a8
+            };
+
             var pmap = this.GetSortedPartyMembers();
             var target = TargetManager.Target;
             var softTarget = TargetManager.SoftTarget;
             bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
 
             var interval = DateTime.Now - this.lastTime;
-            // PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} {actionManager} {softTarget ?? target} interval: {interval}, status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
-            // PluginLog.Debug($"[Args] AM: {actionManager}, AT: {actionType}, ID: {actionID}, TID: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
+            PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} {actionManager} {softTarget ?? target} interval: {interval}, status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
+            PluginLog.Debug($"[Args] AM: {actionManager}, AT: {actionType}, ID: {actionID}, TID: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
 
             // if (interval.TotalMilliseconds < 30) {
             //     // Task.Run(async () => {
@@ -314,7 +328,7 @@ namespace GamepadTweaks
 
                         // 使用UseAction去执行GtAction不会进技能队列, 因为GT需要交互.
                         // 使用UseActionLocation执行则可以
-                        var tgt = softTarget ?? target ?? Plugin.Player;
+                        var tgt = softTarget ?? target;// ?? Plugin.Player;
 
                         this.useActionHook.Disable();
                         unsafe {
@@ -348,14 +362,14 @@ namespace GamepadTweaks
                             ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
                             this.state = GamepadActionManagerState.ActionExecuted;
                         } else {
-                            a.ActionManager = actionManager;
-                            a.Type = (ActionType)actionType;
-                            a.ID = adjustedID;
-                            a.TargetID = targetedActorID;
-                            a.param = param;
-                            a.UseType = useType;
-                            a.pvp = pvp;
-                            a.a8 = a8;
+                            // a.ActionManager = actionManager;
+                            // a.Type = (ActionType)actionType;
+                            // a.ID = adjustedID;
+                            // a.TargetID = targetedActorID;
+                            // a.param = param;
+                            // a.UseType = useType;
+                            // a.pvp = pvp;
+                            // a.a8 = a8;
                             // a.ready = false;
                             // a.done = false;
 
@@ -455,6 +469,7 @@ namespace GamepadTweaks
 
                     this.savedButtonsPressed = 0;
 
+                    a = o;
                     this.state = GamepadActionManagerState.ActionExecuted;
                     goto MainLoop;
                 case GamepadActionManagerState.ActionExecuted:
@@ -477,6 +492,12 @@ namespace GamepadTweaks
                 this.lastActionID = adjustedID;
             }
 
+            if (!this.LastAction.Writer.TryWrite(a)) {
+                PluginLog.Error($"LastAction update failed. Action: {a.ID}");
+            } else {
+
+                PluginLog.Error($"LastAction update success. Action: {a.ID}");
+            }
             this.executedActions.Writer.TryWrite((adjustedID, status));
             return ret;
         }

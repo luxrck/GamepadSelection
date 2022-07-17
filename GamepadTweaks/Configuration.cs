@@ -64,9 +64,9 @@ namespace GamepadTweaks
         public ComboManager ComboManager = null!;
 
         internal DirectoryInfo root;
-        internal string configFile;
-        internal string fontFile;
-        internal string assetFile;
+        internal string ConfigFile;
+        internal string FontFile;
+        internal string ActionFile;
 
         internal string content = String.Empty;
 
@@ -80,9 +80,10 @@ namespace GamepadTweaks
 
             this.root = PluginInterface.ConfigDirectory;
             var cd = this.root.ToString();
-            this.configFile = cd + $"/{PluginInterface.ConfigFile.Name}";
-            this.fontFile = cd + "/Font.otf";
-            this.assetFile = cd + "/Actions.json";
+
+            this.FontFile = Path.Combine(cd, "sarasa-fixed-sc-regular.ttf"); // "Inconsolata-Regular.ttf");
+            this.ConfigFile = Path.Combine(cd, $"{PluginInterface.ConfigFile.Name}");
+            this.ActionFile = Path.Combine(cd, "Actions.json");
 
             try {
                 this.Update();
@@ -127,7 +128,7 @@ namespace GamepadTweaks
         {
             try {
                 if (content is null || content == "") {
-                    using (var fs = File.Create(this.configFile))
+                    using (var fs = File.Create(this.ConfigFile))
                     using (var sw = new StreamWriter(fs))
                     using (var jw = new JsonTextWriter(sw) {
                         Formatting = Formatting.Indented,
@@ -137,7 +138,7 @@ namespace GamepadTweaks
                         (new JsonSerializer()).Serialize(jw, this);
                     }
 
-                    this.content = File.ReadAllText(this.configFile);
+                    this.content = File.ReadAllText(this.ConfigFile);
                 } else {
                     var config = JsonConvert.DeserializeObject<Configuration>(content);
 
@@ -218,16 +219,16 @@ namespace GamepadTweaks
                         {
                             case "":
                                 comboActionType = ComboActionType.Single; break;
-                            case "*":
-                                comboActionType = ComboActionType.Key; break;
                             case "?":
+                                comboActionType = ComboActionType.SingleSkipable; break;
+                            case "*":
                                 comboActionType = ComboActionType.Skipable; break;
                             case "!":
                                 comboActionType = ComboActionType.Blocking; break;
                             default:
                                 if (type.StartsWith("{")) {
-                                    comboActionType = ComboActionType.Multiple;
-                                    var tpattern = new Regex(@"(?<mc>\d+)\s*(,\s*(?<uc>\d+))?", RegexOptions.Compiled);
+                                    comboActionType = ComboActionType.Multi;
+                                    var tpattern = new Regex(@"(?<mc>\d+)\s*(,\s*(?<uc>\d+))?\s*}(?<sk>[?])?", RegexOptions.Compiled);
                                     var tmatch = tpattern.Match(type);
                                     minCount = Int32.Parse(tmatch.Groups["mc"].ToString());
                                     if (tmatch.Groups.ContainsKey("uc")) {
@@ -235,6 +236,11 @@ namespace GamepadTweaks
                                         maxCount = !String.IsNullOrEmpty(ucs) ? Int32.Parse(ucs) : minCount;
                                     } else {
                                         maxCount = minCount;
+                                    }
+                                    if (tmatch.Groups.ContainsKey("sk")) {
+                                        var sks = tmatch.Groups["sk"].ToString().Trim();
+                                        if (sks == "?")
+                                            comboActionType = ComboActionType.MultiSkipable;
                                     }
                                 }
                                 break;
@@ -266,7 +272,7 @@ namespace GamepadTweaks
         public bool Save()
         {
             try {
-                File.WriteAllText(this.configFile, this.content);
+                File.WriteAllText(this.ConfigFile, this.content);
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 return false;

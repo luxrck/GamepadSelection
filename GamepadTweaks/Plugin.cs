@@ -70,6 +70,7 @@ namespace GamepadTweaks
 /gt add <action> [<selectOrder>] → Add specific <action> in monitor.
 /gt remove <action> → Remove specific monitored <action>.
 /gt reset [<action>] → Reset combo index for given group.
+/gt id <action> → Show Action ID.
 
 <action>        Action name (in string).
 <selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons (Xbox)).")]
@@ -157,6 +158,24 @@ namespace GamepadTweaks
                         }
                         Config.ResetComboState(groupID);
                         return;
+                    case "id":
+                        Task.Run(async () => {
+                            try {
+                                var action = argv[1];
+                                GamepadActionManager.LastAction.Reader.TryRead(out var o);
+                                Send($"/ac {action} <t>");
+                                await Task.Delay(1000);
+                                GamepadActionManager.LastAction.Reader.TryRead(out var a);
+                                var id = a is not null ? a.ID : 0;
+                                PluginLog.Debug($"Action: {action}, ID: {id}");
+                                Echo($"Action: {action}, ID: {id}");
+                                // Chat.UpdateQueue();
+                            } catch(Exception e) {
+                                Chat.PrintError($"Retrive action id failed.");
+                                PluginLog.Error($"Exception: {e}");
+                            }
+                        });
+                        return;
                     default:
                         break;
                 }
@@ -204,6 +223,9 @@ namespace GamepadTweaks
 
             PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
             WindowSystem.RemoveAllWindows();
+
+            Window.Dispose();
+            PluginLog.Debug("Exiting GamepadTweaks.");
         }
 
         public void Dispose()
