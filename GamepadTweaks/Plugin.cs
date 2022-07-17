@@ -12,6 +12,8 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Logging;
 using Dalamud.Plugin;
 using XivCommon;
+using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 using GamepadTweaks.Attributes;
@@ -69,7 +71,7 @@ namespace GamepadTweaks
 /gt info → Show gt info.
 /gt add <action> [<selectOrder>] → Add specific <action> in monitor.
 /gt remove <action> → Remove specific monitored <action>.
-/gt reset [<action>] → Reset combo index for given group.
+/gt reset [<action>] → Reset combo index for given group (reset all if <action> not given).
 /gt id <action> → Show Action ID.
 
 <action>        Action name (in string).
@@ -88,12 +90,12 @@ namespace GamepadTweaks
                         Echo("[GamepadTweaks] Enabled.");
                         GamepadActionManager.Enable();
                         Chat.UpdateQueue();
-                        break;
+                        return;
                     case "off":
                         Echo("[GamepadTweaks] Disabled.");
                         GamepadActionManager.Disable();
                         Chat.UpdateQueue();
-                        break;
+                        return;
                     case "info":
                         string bs(bool x) => x ? "●" : "○";
                         // string pr<T>(T x, int s = 6) => $"{x}".PadRight(s);
@@ -113,7 +115,7 @@ namespace GamepadTweaks
                         }
                         Echo("====== [E GamepadTweaks] ======");
                         Chat.UpdateQueue();
-                        break;
+                        return;
                     case "add":
                         try {
                             var actionkv = argv[1].Trim();
@@ -177,7 +179,7 @@ namespace GamepadTweaks
                         });
                         return;
                     default:
-                        break;
+                        return;
                 }
 
                 try {

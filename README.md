@@ -28,6 +28,8 @@ Serial execute per line in macro like any other script language, auto delay afte
 /gt list → List actions and corresponding selection order.
 /gt add <action> [<selectOrder>] → Add specific <action> in monitor.
 /gt remove <action> → Remove specific monitored <action>.
+/gt reset [<action>] → Reset combo index for given group (reset all if <action> not given).
+/gt id <action> → Show Action ID.
 
 <action>        Action name (in string).
 <selectOrder>   The order for party member selection (only accepted Dpad and y/b/a/x buttons (Xbox)).
@@ -66,13 +68,22 @@ Serial execute per line in macro like any other script language, auto delay afte
   // m:  Manual
   // l:  Linear
   // s:  Strict
-  // ls: LinearWithSkip
-  // ss: StrictWithSkip
   // lb: LinearBlocked
   // sb: StrictBlocked
+  // o:  Ochain
   "combo": [
-    "ls: 重劈 -> 铁壁 -> 凶残裂 -> 暴风斩 : 暴风斩",  // 如果"铁壁"在CD, 则可以跳过铁壁, 状态转移到下一个.
-    "l : 小奥秘卡 -> 出王冠卡 : 出王冠卡",
+    "o : 抽卡! -> 出卡? : 出卡",
+    "o : 小奥秘卡! -> 出王冠卡? : 出王冠卡",
+    "o : 龙神附体! -> 星极超流 -> 龙神迸发 ->
+         火神召唤! -> 宝石耀{2}? ->
+         风神召唤! -> 宝石耀{4}? ->
+         土神召唤! -> 宝石耀{4}? ->
+         : 宝石耀",
+    "o : 龙神附体! -> 星极超流 -> 龙神迸发 ->
+         火神召唤! -> 宝石辉{2}? ->
+         风神召唤! -> 宝石辉{4}? ->
+         土神召唤! -> 宝石辉{4}? ->
+         : 宝石辉",
   ],
 
   // Key: Action / ActionID

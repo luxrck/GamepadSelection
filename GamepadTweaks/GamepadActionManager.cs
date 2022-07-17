@@ -205,12 +205,11 @@ namespace GamepadTweaks
 
                 try {
                     if (this.executedActions.Reader.TryRead(out (uint ID, ActionStatus Status) a)) {
-                        var adjusted = Actions.AdjustedActionID(a.ID);
+                        // var adjusted = Actions.AdjustedActionID(a.ID);
 
                         if (Config.IsComboAction(a.ID)) {
+                            PluginLog.Debug($"update combo action: {a.ID}");
                             await Config.UpdateComboState(a.ID, a.Status);
-                        } else if (Config.IsComboAction(adjusted)) {
-                            await Config.UpdateComboState(adjusted, a.Status);
                         }
                     } else {
                         await Config.UpdateComboState();
@@ -257,9 +256,8 @@ namespace GamepadTweaks
             var softTarget = TargetManager.SoftTarget;
             bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
 
-            var interval = DateTime.Now - this.lastTime;
-            PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} {actionManager} {softTarget ?? target} interval: {interval}, status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
-            PluginLog.Debug($"[Args] AM: {actionManager}, AT: {actionType}, ID: {actionID}, TID: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
+            PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} {softTarget ?? target} status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
+            PluginLog.Debug($"[UseAction][Args] am: {actionManager}, type: {actionType}, id: {actionID}, target: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
 
             // if (interval.TotalMilliseconds < 30) {
             //     // Task.Run(async () => {
@@ -280,7 +278,7 @@ namespace GamepadTweaks
 
             // Only handle Spell && Ability(?)
             if (actionType != (uint)ActionType.Spell && actionType != (uint)ActionType.Ability) {
-                PluginLog.Debug($"[UseAction] not a spell. {adjustedID} {actionType}");
+                PluginLog.Debug($"[UseAction] Not a spell. {adjustedID} {actionType}");
                 ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
                 goto MainRet;
             }
@@ -303,7 +301,7 @@ namespace GamepadTweaks
                                     // DelayTo = this.CalculateDelay(adjustedID),
                                 });
 
-                    PluginLog.Debug($"[UseAction] Macro Local Delay? {suc}");
+                    PluginLog.Debug($"[UseAction] Macro local delay? {suc}");
                 }
 
                 if (suc) return false;
@@ -362,17 +360,6 @@ namespace GamepadTweaks
                             ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
                             this.state = GamepadActionManagerState.ActionExecuted;
                         } else {
-                            // a.ActionManager = actionManager;
-                            // a.Type = (ActionType)actionType;
-                            // a.ID = adjustedID;
-                            // a.TargetID = targetedActorID;
-                            // a.param = param;
-                            // a.UseType = useType;
-                            // a.pvp = pvp;
-                            // a.a8 = a8;
-                            // a.ready = false;
-                            // a.done = false;
-
                             this.state = GamepadActionManagerState.EnteringGamepadSelection;
                         }
                     } else {
@@ -477,7 +464,7 @@ namespace GamepadTweaks
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                         this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        // PluginLog.Debug($"[{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
+                        PluginLog.Debug($"[{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
                     }
 
                     this.state = GamepadActionManagerState.Start;
@@ -490,14 +477,9 @@ namespace GamepadTweaks
             if (status == ActionStatus.Ready) {
                 this.lastTime = DateTime.Now;
                 this.lastActionID = adjustedID;
+                this.LastAction.Writer.TryWrite(a);
             }
 
-            if (!this.LastAction.Writer.TryWrite(a)) {
-                PluginLog.Error($"LastAction update failed. Action: {a.ID}");
-            } else {
-
-                PluginLog.Error($"LastAction update success. Action: {a.ID}");
-            }
             this.executedActions.Writer.TryWrite((adjustedID, status));
             return ret;
         }
@@ -754,7 +736,6 @@ namespace GamepadTweaks
             return TimeSpan.FromMilliseconds(remainMs);
         }
 
-        [HandleProcessCorruptedStateExceptions]
         private bool UseActionToTarget(ActionType actionType, uint actionID)
         {
             try {
@@ -767,7 +748,6 @@ namespace GamepadTweaks
             return true;
         }
 
-        [HandleProcessCorruptedStateExceptions]
         private bool UseAction(ActionType actionType, uint actionID)
         {
             try {
@@ -825,37 +805,6 @@ namespace GamepadTweaks
         //     }
 
         //     return o;
-        // }
-
-        // public uint AdjustedActionID(IntPtr actionManager, uint actionID)
-        // {
-        //     var adjustedID = actionID;
-        //     unsafe {
-        //         var am = (ActionManager*)actionManager;
-        //         if (am != null) {
-        //             // real action id
-        //             adjustedID = am->GetAdjustedActionId(actionID);
-        //         }
-        //     }
-        //     return adjustedID;
-        // }
-
-        // private ActionStatus GetActionStatus(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID = 3758096384U)
-        // {
-        //     uint status = 0;
-        //     unsafe {
-        //         var am = (ActionManager*)actionManager;
-        //         if (am != null) {
-        //             status = am->GetActionStatus((ActionType)actionType, actionID, targetedActorID);
-        //         }
-        //     }
-
-        //     try {
-        //         return (ActionStatus)status;
-        //     } catch(Exception e) {
-        //         PluginLog.Debug($"Exception: {e}");
-        //         return ActionStatus.Invalid;
-        //     }
         // }
 
         public void Enable()

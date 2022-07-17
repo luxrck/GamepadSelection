@@ -20,14 +20,13 @@ namespace GamepadTweaks
         Unk_571 = 571,
         NotSatisfied = 572,
         NotLearned = 573,
-        // Action正处于动画中, 执行其它Action就会被锁住
-        // 咏唱时间内
+        // 咏唱时间内. 不会被自动加入队列
         Locking = 580,
         Unk_581 = 581,
-        // 咏唱时间段外, 复唱时间内
+        // 咏唱时间段外, 复唱时间内. 可以被加入队列
         Pending = 582,
 
-        // 下面是我自定义的
+        // 自定义
         Delay = 0xffff0001,
         LocalDelay = 0xffff0002,
         Invalid = 0xffffffff,
@@ -35,14 +34,6 @@ namespace GamepadTweaks
 
     public class ActionMap
     {
-        // private Dictionary<uint, HashSet<uint>> Alias = new Dictionary<uint, HashSet<uint>>() {
-        //     {17055, new HashSet<uint>() {4401, 4402, 4403, 4404, 4405, 4406} },   // Play
-        //     {25869, new HashSet<uint>() {7444, 7445} }, // Crown Play
-        //     {25822, new HashSet<uint>() {3582} },   // 星极超流
-        //     {3579, new HashSet<uint>() {25820} },   // 毁荡
-        //     {25883, new HashSet<uint>() {25819, 25818, 25817} },    // 宝石耀
-        // };
-
         private Dictionary<uint, uint[]> Alias = new Dictionary<uint, uint[]>() {
             {17055, new uint[] {4401, 4402, 4403, 4404, 4405, 4406} },   // Play
             {25869, new uint[] {7444, 7445} }, // Crown Play
@@ -50,7 +41,7 @@ namespace GamepadTweaks
             {3579,  new uint[] {25820} },   // 毁荡
             {25883, new uint[] {25819, 25818, 25817} },    // 宝石耀
             {25884, new uint[] {25816, 25815, 25814} },    // 宝石辉
-            {25800, new uint[] {3581} },    //以太蓄能
+            {25800, new uint[] {3581, 7427} },    //以太蓄能
         };
 
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
@@ -133,8 +124,9 @@ namespace GamepadTweaks
 
             // SMN
             {("zh", "龙神附体", 3581)},
-            {("zh", "死星核爆", 3582)},
+            {("zh", "龙神召唤", 7427)},
             {("zh", "以太蓄能", 25800)},
+            {("zh", "死星核爆", 3582)},
             {("zh", "星极脉冲", 25820)},
             {("zh", "星极超流", 25822)},
             {("zh", "宝石耀", 25883)},

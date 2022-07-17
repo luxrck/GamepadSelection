@@ -2,6 +2,7 @@ using Dalamud.Configuration;
 using Dalamud.Logging;
 using Dalamud.Plugin;
 using Newtonsoft.Json;
+using System.Reflection;
 using System.Text.RegularExpressions;
 
 namespace GamepadTweaks
@@ -17,21 +18,6 @@ namespace GamepadTweaks
         }
 
         int IPluginConfiguration.Version { get; set; }
-
-        // public delegate void UpdateContentDelegate(string content);
-        // public UpdateContentDelegate UpdateContent;
-
-        // {
-        //     "alwaysInParty": false,
-        //     "gs": [
-        //          "均衡诊断"
-        //     ],
-        //     "priority": "y b a x right down up left",
-        //     "rules": {
-        //         "均衡诊断": "y b a x right down up left",
-        //         "17055": "y b a x up right down left",   // 出卡
-        //     }
-        // }
 
         #region Saved configuration values
         [JsonProperty]
@@ -63,10 +49,10 @@ namespace GamepadTweaks
         public ActionMap Actions = new ActionMap();
         public ComboManager ComboManager = null!;
 
-        internal DirectoryInfo root;
-        internal string ConfigFile;
-        internal string FontFile;
-        internal string ActionFile;
+        public string Root;
+        public string ConfigFile;
+        public string FontFile;
+        public string ActionFile;
 
         internal string content = String.Empty;
 
@@ -78,12 +64,12 @@ namespace GamepadTweaks
         {
             DalamudPluginInterface PluginInterface = Plugin.PluginInterface;
 
-            this.root = PluginInterface.ConfigDirectory;
-            var cd = this.root.ToString();
+            this.Root = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
 
-            this.FontFile = Path.Combine(cd, "sarasa-fixed-sc-regular.ttf"); // "Inconsolata-Regular.ttf");
-            this.ConfigFile = Path.Combine(cd, $"{PluginInterface.ConfigFile.Name}");
-            this.ActionFile = Path.Combine(cd, "Actions.json");
+            this.FontFile = Path.Combine(this.Root, "sarasa-fixed-sc-regular.ttf");
+            this.ActionFile = Path.Combine(this.Root, "Actions.json");
+
+            this.ConfigFile = PluginInterface.ConfigFile.ToString();
 
             try {
                 this.Update();
@@ -97,8 +83,7 @@ namespace GamepadTweaks
             Configuration? config = null;
 
             try {
-                var configFile = Plugin.PluginInterface.ConfigDirectory.ToString() + $"/{Plugin.PluginInterface.ConfigFile.Name}";
-                var content = File.ReadAllText(configFile);
+                var content = File.ReadAllText(Plugin.PluginInterface.ConfigFile.ToString());
                 config = JsonConvert.DeserializeObject<Configuration>(content) ?? new Configuration();
                 config.content = content;
             } catch(Exception e) {
@@ -127,7 +112,7 @@ namespace GamepadTweaks
         public bool Update(string content = "")
         {
             try {
-                if (content is null || content == "") {
+                if (String.IsNullOrEmpty(content)) {
                     using (var fs = File.Create(this.ConfigFile))
                     using (var sw = new StreamWriter(fs))
                     using (var jw = new JsonTextWriter(sw) {
@@ -206,7 +191,7 @@ namespace GamepadTweaks
                 foreach (string s in this.combo) {
                     var ss = s.Split(":");
                     var comboType = ss[0].Trim();
-                    var comboActions = ss[1].Split("->").Where(a => a != "").Select(a => {
+                    var comboActions = ss[1].Split("->").Where(a => !String.IsNullOrEmpty(a) && !String.IsNullOrWhiteSpace(a)).Select(a => {
                         var pattern = new Regex(@"(?<action>[\w\s]+\w)(?<type>[\d\,\{\}\*\!\?]+)?", RegexOptions.Compiled);
                         var match = pattern.Match(a.Trim());
                         var action = match.Groups.ContainsKey("action") ? match.Groups["action"].ToString().Trim() : "";

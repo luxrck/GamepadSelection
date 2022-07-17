@@ -23,29 +23,28 @@ namespace GamepadTweaks
         // a1 *a2 b1 a4 a5 : Pre : Trigger a2
         // a1 a2 *b1 a4 a5 : Now : if b1 is avaliable
         // a1 a2 b1 *a4 a5 : Now : if b1 in CD
-        LinearWithSkip = 3,
-        StrictWithSkip = 4,
-        LinearBlocked = 5,
-        StrictBlocked = 6,
-        // p : like macro
-        Priority = 7,
-        Oscript = 8,
+        LinearBlocked = 3,
+        StrictBlocked = 4,
+        Ochain = 6,
+        // a : macro style
+        Async = 7,
     }
 
+    // Used by Ochain
     public enum ComboActionType : int
     {
-        // none
+        // <action>
         Single = 0x01,
-        // {a,b}
+        // <action> {m,u}
         Multi = 0x02,
-        // *
+        // <action> *
         Skipable = 0x04,
-        // !
+        // <action> !
         Blocking = 0x08,
         Ability = 0x10,
-        // ?
+        // <action> ?
         SingleSkipable = Single | Skipable,
-        // {a,b}?
+        // <action> {a,b}?
         MultiSkipable = Multi | Skipable,
     }
 
@@ -68,10 +67,12 @@ namespace GamepadTweaks
         public ComboType Type;
 
         public ActionMap Actions = new ActionMap();
+        private DateTime LastTime = DateTime.Now;
 
         private TargetManager TargetManager = Plugin.TargetManager;
 
         private SemaphoreSlim actionLock = new SemaphoreSlim(1, 1);
+        private SemaphoreSlim actionLockHighPriority = new SemaphoreSlim(1, 1);
 
         public ComboGroup(uint id, List<ComboAction> actions, string ctype = "l")
         {
@@ -84,18 +85,14 @@ namespace GamepadTweaks
                     Type = ComboType.Linear; break;
                 case "s":
                     Type = ComboType.Strict; break;
-                case "ls":
-                    Type = ComboType.LinearWithSkip; break;
-                case "ss":
-                    Type = ComboType.StrictWithSkip; break;
                 case "lb":
                     Type = ComboType.LinearBlocked; break;
                 case "sb":
                     Type = ComboType.StrictBlocked; break;
                 case "o":
-                    Type = ComboType.Oscript; break;
-                case "p":
-                    Type = ComboType.Priority; break;
+                    Type = ComboType.Ochain; break;
+                case "a":
+                    Type = ComboType.Async; break;
                 default:
                     Type = ComboType.Linear; break;
             }
@@ -105,40 +102,22 @@ namespace GamepadTweaks
         public uint Current(uint lastComboAction = 0, float comboTimer = 0f)
         {
             return ComboActions[CurrentIndex].ID;
-            // PluginLog.Debug($"{lastComboAction} {comboTimer}");
-            // if (lastComboAction == 0 || comboTimer <= 0) {
-            //     return ComboActions[CurrentIndex];
-            // }
-
-            // int index = ActionPos.ContainsKey(lastComboAction) ? ActionPos[lastComboAction] : -1;
-            // var actionID = index < 0 ? ComboActions[CurrentIndex] : ComboActions[(index+1)%ComboActions.Count];
-
-            // return actionID;
         }
 
-        public bool Contains(uint actionID) => ComboActions.Any(x => x.ID == actionID);
+        public bool Contains(uint actionID) => ComboActions.Any(x => Actions.Equals(x.ID, actionID));
 
         public void StateReset() => CurrentIndex = 0;
 
         public async Task<bool> StateUpdate(uint actionID, ActionStatus status = ActionStatus.Ready)
         {
+            if (!Plugin.Ready) return false;
+
             if (status != ActionStatus.Ready && status != ActionStatus.Pending && status != ActionStatus.NotSatisfied && status != ActionStatus.NotLearned)
                 return true;
 
-            await this.actionLock.WaitAsync();
+            int animationDelay = 500;
 
-            // 1 -> 2 -> 3 : 1
-            // 1 -> 2 : 2
             var baseActionID = Actions.BaseActionID(actionID);
-
-            // var index = -1;
-            // if (Type != ComboType.Strict) {
-            //     index = ActionPos.ContainsKey(actionID) ? ActionPos[actionID] : -1;
-            //     if (index == -1)
-            //         index = ActionPos.ContainsKey(baseActionID) ? ActionPos[baseActionID] : -1;
-            // } else {
-            //     index = ComboActions.IndexOf(actionID);
-            // }
 
             var index = ComboActions.FindIndex(CurrentIndex, x => Actions.Equals(x.ID, actionID));
             if (index == -1)
@@ -146,20 +125,40 @@ namespace GamepadTweaks
 
             // *a1 -> a2 -> a3 -> a1 -> a4
             // task1 : Update(a1) -> Lock -> DoSomething -> Wait(500ms) -> CurrentIndex++ -> Unlock
-            // task2 :      |-> Update(a1) -> Wait Lock -> Lock -> DoSomething -> ...
-            //
-            if (index == -1 && Type != ComboType.Oscript) {
-                this.actionLock.Release();
-                return false;
+            // task2 :      |-> Update(a1) -> Give up is not waited -> ...
+
+            var originalIndex = index;
+
+            if (index == -1) {
+                if (Type != ComboType.Ochain) {
+                    return false;
+                } else {
+                    if (!(await this.actionLock.WaitAsync(0))) return false;
+                    if (!(await this.actionLockHighPriority.WaitAsync(0))) {
+                        this.actionLock.Release();
+                        return false;
+                    }
+                }
+            } else {
+                await this.actionLock.WaitAsync();
+                if ((DateTime.Now - this.LastTime).TotalMilliseconds < animationDelay || status != ActionStatus.Ready) {
+                    if (!(await this.actionLockHighPriority.WaitAsync(0))) {
+                        this.actionLock.Release();
+                        return false;
+                    }
+                } else {
+                    await this.actionLockHighPriority.WaitAsync();
+                }
             }
 
-            var rgroup = Actions.RecastGroup(actionID);
-            var recast = Actions.RecastTimeRemain(actionID);
+            this.actionLock.Release();
 
-            // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, index: {index}, baseAction: {baseActionID} action: {actionID}, rgroup: {rgroup} status: {status} remain: {recast}");
+            var caction = ComboActions[(index == -1 ? CurrentIndex : index) % ComboActions.Count];
+            var cadjust = Actions.AdjustedActionID(caction.ID);
+            var cstatus = index == -1 ? Actions.ActionStatus(cadjust) : status;
+            var crgroup = Actions.RecastGroup(cadjust);
+            var cremain = Actions.RecastTimeRemain(cadjust);
 
-            int animationDelay = 500;
-            var originalIndex = index;
             switch (Type)
             {
                 case ComboType.Manual:
@@ -170,13 +169,12 @@ namespace GamepadTweaks
                         break;
                     if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
-                    } else if (recast > Configuration.GlobalCoolingDown.TotalSeconds) {
+                    } else if (cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
                     }
                     break;
                 case ComboType.StrictBlocked:
                     index = CurrentIndex;
-                    // PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
                     if (!Actions.Equals(ComboActions[CurrentIndex].ID, actionID))
                         break;
                     if ((status == ActionStatus.Ready || status == ActionStatus.NotLearned)) {
@@ -184,35 +182,28 @@ namespace GamepadTweaks
                     }
                     break;
                 case ComboType.Linear:
-                    // PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
                     if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
                         index = (index + 1) % ComboActions.Count;
-                    } else if (Type == ComboType.Linear && recast > Configuration.GlobalCoolingDown.TotalSeconds) {
+                    } else if (Type == ComboType.Linear && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                         index = (index + 1) % ComboActions.Count;
                     }
                     break;
                 case ComboType.LinearBlocked:
-                    // PluginLog.Debug($"[{Type}] Index: {CurrentIndex}, ComboCurrent: {ComboActions[CurrentIndex]}");
                     if ((status == ActionStatus.Ready || status == ActionStatus.NotLearned)) {
                         index = (index + 1) % ComboActions.Count;
                     }
                     break;
-                case ComboType.Oscript:
-                    var caction = ComboActions[(index == -1 ? CurrentIndex : index) % ComboActions.Count];
-                    var cadjust = Actions.AdjustedActionID(caction.ID);
-                    var cstatus = index == -1 ? Actions.ActionStatus(cadjust) : status;
-                    var crgroup = Actions.RecastGroup(cadjust);
-                    var cremain = Actions.RecastTimeRemain(cadjust);
-
+                case ComboType.Ochain:
                     if (cstatus == ActionStatus.NotLearned) {
                         CurrentIndex = (CurrentIndex + 1) % ComboActions.Count;
-                        this.actionLock.Release();
                         return true;
                     }
 
-                    // 刚才调用的是其它组的Action
+                    // usually by GamepadActionManager.UpdateFramework
+                    // or actions in other group
                     if (index == -1) {
                         index = CurrentIndex;
+                        originalIndex = index;
 
                         switch (caction.Type)
                         {
@@ -277,26 +268,32 @@ namespace GamepadTweaks
                                 }
                                 break;
                         }
+
                         PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {Actions[caction.ID]} {caction.Executed}, status: {cstatus}, type: {caction.Type} , crgroup: {crgroup}, remain: {cremain}");
-                        // animationDelay = 500;
                     }
-                    // caction.LastTime = DateTime.Now;
                     break;
-                case ComboType.Priority:
+                case ComboType.Async:
                     // TODO
-                    // may be just using macro is the best choice.
                     break;
                 default:
                     break;
             }
 
             if (originalIndex != index) {
+                var me = Plugin.Player;
+                if (me is not null && me.IsCasting && animationDelay > 0) {
+                    animationDelay = Math.Max((int)((me.TotalCastTime - me.CurrentCastTime) * 1000) + 100, animationDelay);
+                }
+
                 // 反正能力技之间的插入也有时间间隔, 不如等一等, 放动画
+                if (animationDelay > 0)
+                    PluginLog.Debug($"animationDelay: {animationDelay}");
                 await Task.Delay(animationDelay);
                 CurrentIndex = index % ComboActions.Count;
+                this.LastTime = DateTime.Now;
             }
 
-            this.actionLock.Release();
+            this.actionLockHighPriority.Release();
 
             return true;
         }
@@ -331,16 +328,10 @@ namespace GamepadTweaks
         public async Task<bool> StateUpdate(uint actionID, ActionStatus status = ActionStatus.Ready)
         {
             return (await Task.WhenAll(ComboGroups.Select(i => i.Value.StateUpdate(actionID, status)).ToArray())).Any();
-            // foreach (var i in ComboGroups) {
-            //     var combo = i.Value;
-            //     var ret = await combo.StateUpdate(actionID, status);
-            //     if (ret)
-            //         flag = ret;
-            // }
         }
 
         public uint Current(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => ComboGroups.ContainsKey(groupID) ? ComboGroups[groupID].Current(lastComboAction, comboTimer) : groupID;
-        public bool Contains(uint actionID) => ComboGroups.Any(x => x.Value.Contains(actionID) || x.Value.Contains(Actions.BaseActionID(actionID)));
+        public bool Contains(uint actionID) => ComboGroups.Any(x => x.Value.Contains(actionID) || x.Value.Contains(actionID));
         public bool ContainsGroup(uint actionID) => ComboGroups.ContainsKey(actionID);
     }
 }
