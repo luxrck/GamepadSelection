@@ -34,11 +34,19 @@ namespace GamepadTweaks
         [PluginService] public static Framework Framework { get; private set; } = null!;
 
         public static XivCommonBase XivCommon { get; private set; } = null!;
-        public static Configuration Config { get; private set; } = null!;
         public static PluginCommandManager<Plugin> Commands { get; private set; } = null!;
 
+        public static string ClientLanguage => ClientState is null ? "zh" : ClientState.ClientLanguage switch {
+            Dalamud.ClientLanguage.ChineseSimplified => "zh",
+            Dalamud.ClientLanguage.English => "en",
+            Dalamud.ClientLanguage.Japanese => "jp",
+            _ => "zh",
+        };
+
         public string Name => "Gamepad Tweaks (for Healers)";
-        public ActionMap Actions = new ActionMap();
+
+        public static Configuration Config { get; private set; } = null!;
+        public static Actions Actions = new Actions();
 
         private PluginWindow Window { get; set; }
         private WindowSystem WindowSystem { get; set; }
@@ -164,13 +172,11 @@ namespace GamepadTweaks
                         Task.Run(async () => {
                             try {
                                 var action = argv[1];
-                                GamepadActionManager.LastAction.Reader.TryRead(out var o);
                                 Send($"/ac {action} <t>");
                                 await Task.Delay(1000);
-                                GamepadActionManager.LastAction.Reader.TryRead(out var a);
-                                var id = a is not null ? a.ID : 0;
-                                PluginLog.Debug($"Action: {action}, ID: {id}");
-                                Echo($"Action: {action}, ID: {id}");
+                                var a = GamepadActionManager.LastActionID;
+                                PluginLog.Debug($"Action: {action}, ID?: {a}");
+                                Echo($"Action: {action}, ID: {a}");
                                 // Chat.UpdateQueue();
                             } catch(Exception e) {
                                 Chat.PrintError($"Retrive action id failed.");

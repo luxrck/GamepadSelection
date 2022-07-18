@@ -46,13 +46,13 @@ namespace GamepadTweaks
         #endregion
 
         // public Dictionary<string, uint> actions;
-        public ActionMap Actions = new ActionMap();
+        public Actions Actions = new Actions();
         public ComboManager ComboManager = null!;
 
-        public string Root;
-        public string ConfigFile;
-        public string FontFile;
-        public string ActionFile;
+        public static string Root => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? String.Empty;
+        public static string FontFile => Path.Combine(Root, "sarasa-fixed-sc-regular.ttf");
+        public static string ActionFile => Path.Combine(Root, "Actions.json");
+        public static string ConfigFile => Plugin.PluginInterface.ConfigFile.ToString();
 
         internal string content = String.Empty;
 
@@ -60,23 +60,14 @@ namespace GamepadTweaks
         private HashSet<uint> gtoffActions = new HashSet<uint>();
         private Dictionary<uint, string> userActions = new Dictionary<uint, string>();
 
-        public Configuration()
-        {
-            DalamudPluginInterface PluginInterface = Plugin.PluginInterface;
-
-            this.Root = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
-
-            this.FontFile = Path.Combine(this.Root, "sarasa-fixed-sc-regular.ttf");
-            this.ActionFile = Path.Combine(this.Root, "Actions.json");
-
-            this.ConfigFile = PluginInterface.ConfigFile.ToString();
-
-            try {
-                this.Update();
-            } catch(Exception e) {
-                PluginLog.Error($"Exception: {e}");
-            }
-        }
+        // public Configuration()
+        // {
+        //     try {
+        //         this.Update();
+        //     } catch(Exception e) {
+        //         PluginLog.Error($"Exception: {e}");
+        //     }
+        // }
 
         public static Configuration Load()
         {
@@ -97,9 +88,9 @@ namespace GamepadTweaks
         }
 
         public bool ActionInMonitor(uint actionID) => IsGsAction(actionID) || IsGtoffAction(actionID) || IsUserAction(actionID);
-        public bool IsGsAction(uint actionID) => this.gsActions.Contains(actionID) || IsUserAction(actionID);
-        public bool IsGtoffAction(uint actionID) => this.gtoffActions.Contains(actionID);
-        public bool IsUserAction(uint actionID) => this.userActions.ContainsKey(actionID);
+        public bool IsGsAction(uint actionID) => this.gsActions.Any(x =>Actions.Equals(x, actionID)) || IsUserAction(actionID);
+        public bool IsGtoffAction(uint actionID) => this.gtoffActions.Any(x => Actions.Equals(x, actionID));
+        public bool IsUserAction(uint actionID) => this.userActions.Any(x => Actions.Equals(x.Key, actionID));
         public bool IsComboAction(uint actionID) => this.ComboManager.Contains(actionID);
         public bool IsComboGroup(uint actionID) => this.ComboManager.ContainsGroup(actionID);
 
@@ -107,13 +98,13 @@ namespace GamepadTweaks
 
         public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.ComboManager.Current(groupID, lastComboAction, comboTimer);
         public void ResetComboState(uint groupID) => this.ComboManager.StateReset(groupID);
-        public async Task<bool> UpdateComboState(uint actionID = 0, ActionStatus status = ActionStatus.Ready) => await this.ComboManager.StateUpdate(actionID, status);
+        public async Task<bool> UpdateComboState(uint actionID = 0, ActionStatus status = ActionStatus.Ready, bool succeed = true, DateTime timestamp = default(DateTime)) => await this.ComboManager.StateUpdate(actionID, status, succeed, timestamp);
 
         public bool Update(string content = "")
         {
             try {
                 if (String.IsNullOrEmpty(content)) {
-                    using (var fs = File.Create(this.ConfigFile))
+                    using (var fs = File.Create(ConfigFile))
                     using (var sw = new StreamWriter(fs))
                     using (var jw = new JsonTextWriter(sw) {
                         Formatting = Formatting.Indented,
@@ -123,7 +114,7 @@ namespace GamepadTweaks
                         (new JsonSerializer()).Serialize(jw, this);
                     }
 
-                    this.content = File.ReadAllText(this.ConfigFile);
+                    this.content = File.ReadAllText(ConfigFile);
                 } else {
                     var config = JsonConvert.DeserializeObject<Configuration>(content);
 
@@ -257,7 +248,7 @@ namespace GamepadTweaks
         public bool Save()
         {
             try {
-                File.WriteAllText(this.ConfigFile, this.content);
+                File.WriteAllText(ConfigFile, this.content);
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 return false;

@@ -19,34 +19,6 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace GamepadTweaks
 {
-    public class GameAction {
-        public IntPtr ActionManager = IntPtr.Zero;
-        public ActionType Type = ActionType.Spell;
-        public uint ID;
-        public uint TargetID = Configuration.DefaultInvalidGameObjectID;
-        public uint param = 0;
-
-        // 0 : normal
-        // 2 : macro
-        public uint UseType = 0;
-
-        public uint pvp = 0;
-        public IntPtr a8 = IntPtr.Zero;
-        public ActionStatus Status = ActionStatus.Ready;
-        public DateTime DelayTo = DateTime.Now;
-
-        public bool Targeted => TargetID != Configuration.DefaultInvalidGameObjectID;
-
-        public bool IsValid => this.ID > 0;
-    }
-
-    // public class GameAction {
-    //     public uint ID;
-    //     public bool Targeted;
-    //     public ActionStatus Status;
-    //     public DateTime DelayTo = DateTime.Now;
-    // }
-
     public class Member {
         public string Name = String.Empty;
         public uint ID;
@@ -86,24 +58,26 @@ namespace GamepadTweaks
         };
 
         public GamepadActionManagerState state = GamepadActionManagerState.Start;
-        public bool inGamepadSelectionMode = false;
+        // public bool inGamepadSelectionMode = false;
         public Channel<GameAction> LastAction = Channel.CreateBounded<GameAction>(new BoundedChannelOptions(1) {
             FullMode = BoundedChannelFullMode.DropOldest
         });
+        public DateTime LastTime;
+        public uint LastActionID;
 
-        private Channel<(uint, ActionStatus)> executedActions = Channel.CreateUnbounded<(uint, ActionStatus)>();
+        private Channel<(uint, ActionStatus, bool)> executedActions = Channel.CreateUnbounded<(uint, ActionStatus, bool)>();
         private Channel<GameAction> pendingActions = Channel.CreateUnbounded<GameAction>();
+
+        // private Dictionary<uint, uint> savedActionIconMap = new Dictionary<uint, uint>();
 
         private ushort savedButtonsPressed;
         private GameAction savedAction;
-        private DateTime lastTime;
-        private uint lastActionID;
         private SemaphoreSlim actionLock = new SemaphoreSlim(1, 1);
 
         private IntPtr comboTimerPtr;
         private IntPtr lastComboActionPtr;
 
-        private ActionMap Actions = new ActionMap();
+        private Actions Actions = new Actions();
 
         private Configuration Config = Plugin.Config;
         private SigScanner SigScanner = Plugin.SigScanner;
@@ -157,40 +131,34 @@ namespace GamepadTweaks
                     // PluginLog.Debug($"[ExecuteAction Async] {m.ID} Targeted: {m.Targeted} {m.DelayTo} {DateTime.Now} {(m.DelayTo - DateTime.Now).TotalMilliseconds}");
 
                 TaskWait:
-                    var savedLastTime = this.lastTime;
+                    var savedLastTime = this.LastTime;
                     var delay = (int)CalculateDelay(m.ID).TotalMilliseconds;
-                    delay = Math.Min(delay, 2600);  // 至多等待一个gcd
+                    delay = Math.Min(delay, (int)Configuration.GlobalCoolingDown.TotalMilliseconds);  // 至多等待一个gcd
                     await Task.Delay(delay);
 
                     //Check Plugin status after delay.
                     if (!Plugin.Ready) goto TaskRet;
 
-                    if (savedLastTime != this.lastTime) goto TaskWait;
+                    if (savedLastTime != this.LastTime) goto TaskWait;
 
                     if (m.Status == ActionStatus.Delay) {
-                        if (m.Targeted) {
-                            this.UseActionToTarget(m.Type, m.ID);
-                        } else {
-                            this.UseAction(m.Type, m.ID);
-                        }
+                        this.SendAction(m.ID);
                     } else if (m.Status == ActionStatus.LocalDelay) {
-                        this.useActionHook.Disable();
-                        unsafe {
-                            var am = ActionManager.Instance();
-                            if (am is not null)
-                                ret = am->UseAction(m.Type, m.ID, m.TargetID, m.param, m.UseType, m.pvp, (void*)m.a8);
-                        }
-                        this.useActionHook.Enable();
+                        ret = this.ExecuteAction(m, canTargetSelf: true);
                     }
 
-                    PluginLog.Debug($"[UseActionAsync] wait? {delay}ms {m.ID} {m.TargetID} {m.Status} ret: {ret}, lastID: {this.lastActionID}, lastTime: {this.lastTime}");
+                    PluginLog.Debug($"[UseActionAsync] wait? {delay}ms {m.ID} {m.TargetID} {m.Status} ret: {ret}, lastID: {this.LastActionID}, lastTime: {this.LastTime}");
 
                     if (ret) {
-                        this.lastTime = DateTime.Now;
-                        this.lastActionID = m.ID;
-                        this.LastAction.Writer.TryWrite(m);
+                        this.LastTime = DateTime.Now;
+                        this.LastActionID = m.ID;
+                        // this.LastAction.Writer.TryWrite(m);
+                    }
+
+                    // status == NotSatisfied -> return false;
+                    if (m.Type == ActionType.Spell) {
                         var status = ActionStatus.Ready;
-                        this.executedActions.Writer.TryWrite((m.ID, status));
+                        this.executedActions.Writer.TryWrite((m.ID, status, ret));
                     }
                 }
 
@@ -204,15 +172,16 @@ namespace GamepadTweaks
                 if (!Plugin.Ready) return;
 
                 try {
-                    if (this.executedActions.Reader.TryRead(out (uint ID, ActionStatus Status) a)) {
+                    var now = DateTime.Now;
+                    if (this.executedActions.Reader.TryRead(out (uint ID, ActionStatus Status, bool Result) a)) {
                         // var adjusted = Actions.AdjustedActionID(a.ID);
 
                         if (Config.IsComboAction(a.ID)) {
                             PluginLog.Debug($"update combo action: {a.ID}");
-                            await Config.UpdateComboState(a.ID, a.Status);
+                            await Config.UpdateComboState(a.ID, a.Status, a.Result, now);
                         }
                     } else {
-                        await Config.UpdateComboState();
+                        await Config.UpdateComboState(timestamp: now);
                     }
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");
@@ -241,9 +210,8 @@ namespace GamepadTweaks
             actionID = Actions.BaseActionID(adjustedID);
 
             var a = new GameAction() {
-                ActionManager = actionManager,
-                Type = (ActionType)actionType,
                 ID = adjustedID,
+                Type = (ActionType)actionType,
                 TargetID = targetedActorID,
                 UseType = useType,
                 param = param,
@@ -256,7 +224,9 @@ namespace GamepadTweaks
             var softTarget = TargetManager.SoftTarget;
             bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
 
-            PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {targetedActorID} {softTarget ?? target} status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
+            string actionName = Actions[adjustedID];
+
+            PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {actionName} {targetedActorID} {softTarget ?? target} status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
             PluginLog.Debug($"[UseAction][Args] am: {actionManager}, type: {actionType}, id: {actionID}, target: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
 
             // if (interval.TotalMilliseconds < 30) {
@@ -277,34 +247,32 @@ namespace GamepadTweaks
             // PRECEDURE END
 
             // Only handle Spell && Ability(?)
-            if (actionType != (uint)ActionType.Spell && actionType != (uint)ActionType.Ability) {
+            if (a.Type != ActionType.Spell && a.Type != ActionType.Ability) {
                 PluginLog.Debug($"[UseAction] Not a spell. {adjustedID} {actionType}");
-                ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
-                goto MainRet;
+                return this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
             }
 
             // useType == 2: macro
-            if (useType == 2) {
+            // handle /ac <xx>
+            if (a.UseType == 2) {
                 // GtAction in macro should execute immediately!
-                if (Config.IsGtoffAction(actionID) || Config.IsGtoffAction(adjustedID)) {
-                    ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
-                    goto MainRet;
-                }
+                // if (Config.IsGtoffAction(actionID) || Config.IsGtoffAction(adjustedID)) {
+                //     ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+                //     goto MainRet;
+                // }
 
-                var suc = false;
                 if (Config.blockingAction) {
-                    suc = this.pendingActions.Writer.TryWrite(new GameAction() {
-                                    ActionManager = actionManager,
+                    ret = this.pendingActions.Writer.TryWrite(new GameAction() {
                                     ID = originalActionID,
                                     TargetID = targetedActorID,
                                     Status = ActionStatus.LocalDelay,
                                     // DelayTo = this.CalculateDelay(adjustedID),
                                 });
 
-                    PluginLog.Debug($"[UseAction] Macro local delay? {suc}");
+                    PluginLog.Debug($"[UseAction] Macro local delay? {ret}");
                 }
 
-                if (suc) return false;
+                if (ret) return false;  // <--
 
                 ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
                 goto MainRet;
@@ -328,25 +296,13 @@ namespace GamepadTweaks
                         // 使用UseActionLocation执行则可以
                         var tgt = softTarget ?? target;// ?? Plugin.Player;
 
-                        this.useActionHook.Disable();
-                        unsafe {
-                            var am = (ActionManager*)actionManager;
-                            if (tgt is not null && am is not null) {
-                                var p = new Vector3() {
-                                    X = tgt.Position.X,
-                                    Y = tgt.Position.Y,
-                                    Z = tgt.Position.Z
-                                };
+                        ret = this.ExecuteAction(a, canTargetSelf: true);
 
-                                ret = am->UseActionLocation((ActionType)actionType, actionID, targetedActorID, &p);
-                            } else {
-                                // Entering Gt Mode
-                                ret = am->UseAction((ActionType)actionType, actionID, targetedActorID, param, useType, pvp, (void*)a8);
-                                // Cast again to emulate <gtoff>
-                                ret = am->UseAction((ActionType)actionType, actionID, targetedActorID, param, useType, pvp, (void*)a8);
-                            }
+                        if (!ret) {
+                            a.Status = ActionStatus.LocalDelay;
+                            ret = this.pendingActions.Writer.TryWrite(a);
+                            PluginLog.Debug($"[UseAction] GtoffAction local delay? {ret}");
                         }
-                        this.useActionHook.Enable();
 
                         this.state = GamepadActionManagerState.ActionExecuted;
                     } else if (Config.IsGsAction(actionID) || Config.IsGsAction(adjustedID)) {
@@ -472,15 +428,19 @@ namespace GamepadTweaks
             }
 
         MainRet:
-            if (!ret) return false;
+            // if (!ret) return false;
 
-            if (status == ActionStatus.Ready) {
-                this.lastTime = DateTime.Now;
-                this.lastActionID = adjustedID;
-                this.LastAction.Writer.TryWrite(a);
+            if (ret && a.Status == ActionStatus.Ready) {
+                this.LastTime = DateTime.Now;
+                this.LastActionID = adjustedID;
+                // this.LastAction.Writer.TryWrite(a);
             }
 
-            this.executedActions.Writer.TryWrite((adjustedID, status));
+            // status == NotSatisfied -> return false;
+            if (a.Type == ActionType.Spell) {
+                this.executedActions.Writer.TryWrite((adjustedID, status, ret));
+            }
+
             return ret;
         }
 
@@ -707,7 +667,7 @@ namespace GamepadTweaks
 
         private TimeSpan CalculateDelay(uint actionID)
         {
-            var lgroup = Actions.RecastGroup(this.lastActionID);
+            var lgroup = Actions.RecastGroup(this.LastActionID);
             var cgroup = Actions.RecastGroup(actionID);
 
             // m1 + m2
@@ -721,7 +681,7 @@ namespace GamepadTweaks
             if (me.IsCasting) {
                 remain = (int)((me.TotalCastTime - me.CurrentCastTime) * 1000) + 100;
             } else {
-                remain = (int)(DateTime.Now - this.lastTime).TotalMilliseconds;
+                remain = (int)(DateTime.Now - this.LastTime).TotalMilliseconds;
                 remain = Math.Max(690 - remain, 0);
             }
 
@@ -732,15 +692,17 @@ namespace GamepadTweaks
 
             remainMs = Math.Max((int)(recast * 1000), remain) + 10;
 
-            PluginLog.Debug($"[DelayTime] id: {actionID}, lgroup: {lgroup}, cgroup: {cgroup}, isCasting: {Plugin.Player!.IsCasting}, lastID: {this.lastActionID}, lastTime: {this.lastTime}, recast: {recast}, remain: {remain}, remainMs: {remainMs}ms");
+            PluginLog.Debug($"[DelayTime] id: {actionID}, lgroup: {lgroup}, cgroup: {cgroup}, isCasting: {Plugin.Player!.IsCasting}, lastID: {this.LastActionID}, lastTime: {this.LastTime}, recast: {recast}, remain: {remain}, remainMs: {remainMs}ms");
             return TimeSpan.FromMilliseconds(remainMs);
         }
 
-        private bool UseActionToTarget(ActionType actionType, uint actionID)
+        private bool SendAction(uint actionID)
         {
             try {
+                var tgt = TargetManager.SoftTarget ?? TargetManager.Target;
+                var s = tgt is not null ? "<t>" : "";
                 Plugin.Send($"/merror off");
-                Plugin.Send($"/ac {Actions[actionID]} <t>");
+                Plugin.Send($"/ac {Actions[actionID]} {s}");
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 return false;
@@ -748,16 +710,34 @@ namespace GamepadTweaks
             return true;
         }
 
-        private bool UseAction(ActionType actionType, uint actionID)
+        public bool ExecuteAction(GameAction a, bool canTargetSelf = false)
         {
-            try {
-                Plugin.Send($"/merror off");
-                Plugin.Send($"/ac {Actions[actionID]}");
-            } catch(Exception e) {
-                PluginLog.Error($"Exception: {e}");
-                return false;
+            bool ret = false;
+            this.useActionHook.Disable();
+            unsafe {
+                var am = ActionManager.Instance();
+                if (am is not null) {
+                    if (Config.IsGtoffAction(a.ID)) {
+                        var tgt = Objects.SearchById(a.TargetID);
+                        if (canTargetSelf) tgt = tgt ?? Plugin.Player;
+                        if (tgt is not null && tgt.IsValid()) {
+                            var p = new Vector3() {
+                                X = tgt.Position.X,
+                                Y = tgt.Position.Y,
+                                Z = tgt.Position.Z
+                            };
+                            ret = am->UseActionLocation(a.Type, a.ID, tgt.ObjectId, &p);
+                        } else {
+                            ret = am->UseAction(a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, (void*)a.a8);
+                            ret = am->UseAction(a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, (void*)a.a8);
+                        }
+                    } else {
+                        ret = am->UseAction(a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, (void*)a.a8);
+                    }
+                }
             }
-            return true;
+            this.useActionHook.Enable();
+        return ret;
         }
 
         // private GameObject? NearestTarget(BattleNpcSubKind type = BattleNpcSubKind.Enemy)

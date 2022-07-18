@@ -11,7 +11,6 @@ namespace GamepadTweaks
 {
     public class PluginWindow : Window
     {
-        private Configuration Config = Plugin.Config;
         private UiBuilder UiBuilder = Plugin.PluginInterface.UiBuilder;
 
         private ImFontPtr Font;
@@ -31,15 +30,20 @@ namespace GamepadTweaks
 
         private void BuildFont()
         {
-            if (!File.Exists(Config.FontFile))
-                throw new FileNotFoundException($"Font file not found!: {Config.FontFile}");
+            if (!Plugin.Ready) return;
+
+            // Do not crash!
+            if (!File.Exists(Configuration.FontFile)) {
+                PluginLog.Error($"Font file not found!: {Configuration.FontFile}");
+                return;
+            }
 
             try {
-                Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Config.FontFile, 20.0f, null, ImGui.GetIO().Fonts.GetGlyphRangesChineseFull());
+                Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Configuration.FontFile, 24.0f, null, ImGui.GetIO().Fonts.GetGlyphRangesChineseFull());
                 // Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Config.FontFile, 24.0f);
-                PluginLog.Debug($"Load Monospace Font: {Config.FontFile}");
+                PluginLog.Debug($"Load Monospace Font: {Configuration.FontFile}");
             } catch(Exception e) {
-                PluginLog.Error($"Exception: {e}");
+                PluginLog.Error($"Exception: {e}. Errors in loading: {Configuration.FontFile}");
             }
             FontLoaded = true;
         }
@@ -54,9 +58,9 @@ namespace GamepadTweaks
 
             if (FontLoaded) ImGui.PushFont(Font);
 
-            ImGui.SetNextWindowSizeConstraints(Size ?? new Vector2(600, -1.0f), new Vector2(float.MaxValue, -1.0f));
+            // ImGui.SetNextWindowSizeConstraints(Size ?? new Vector2(600, -1.0f), new Vector2(float.MaxValue, -1.0f));
             ImGui.InputTextMultiline("",
-                                     ref Config.content,
+                                     ref Plugin.Config.content,
                                      10000,
                                      new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - ImGui.GetFrameHeight() - ImGui.GetFontSize() * 2.0f),
                                      ImGuiInputTextFlags.AllowTabInput);
@@ -94,13 +98,13 @@ namespace GamepadTweaks
 
         private bool Save()
         {
-            PluginLog.Debug($"Update config: {Config.content}");
-            if (Config.Update(Config.content)) {
-                Config.Save();
+            PluginLog.Debug($"Update config: {Plugin.Config.content}");
+            if (Plugin.Config.Update(Plugin.Config.content)) {
+                Plugin.Config.Save();
                 return true;
             } else {
                 try {
-                    JsonConvert.DeserializeObject<Configuration>(Config.content);
+                    JsonConvert.DeserializeObject<Configuration>(Plugin.Config.content);
                 } catch(JsonReaderException e) {
                     this.errorMessage = e.Message;
                     ImGui.OpenPopup("Error");
