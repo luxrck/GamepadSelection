@@ -68,7 +68,6 @@ namespace GamepadTweaks
             WindowSystem.AddWindow(Window);
 
             PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
-            Framework.Update += GamepadActionManager.UpdateFramework;
         }
 
         [Command("/gt")]
@@ -140,9 +139,9 @@ namespace GamepadTweaks
                                     Config.gs.Add(action);
                                 }
                             }
-                            Echo($"Add action: {action} ... [ok]");
+                            Echo($"[GamepadTweaks] Add action: {action} ... [ok]");
                         } catch(Exception e) {
-                            Chat.PrintError($"Add action failed.");
+                            Chat.PrintError($"[GamepadTweaks] Add action failed.");
                             PluginLog.Error($"Exception: {e}");
                         }
                         Chat.UpdateQueue();
@@ -152,9 +151,9 @@ namespace GamepadTweaks
                             var action = argv[1];
                             Config.gs.Remove(action);
                             Config.rules.Remove(action);
-                            Echo($"Remove action: {action} ... [ok]");
+                            Echo($"[GamepadTweaks] Remove action: {action} ... [ok]");
                         } catch(Exception e) {
-                            Chat.PrintError($"Remove action failed.");
+                            Chat.PrintError($"[GamepadTweaks] Remove action failed.");
                             PluginLog.Error($"Exception: {e}");
                         }
                         Chat.UpdateQueue();
@@ -174,12 +173,12 @@ namespace GamepadTweaks
                                 await Task.Delay(1000);
                                 var a = GamepadActionManager.LastActionID;
                                 PluginLog.Debug($"Action: {action}, ID?: {a}");
-                                Echo($"Action: {action}, ID: {a}");
-                                // Chat.UpdateQueue();
+                                Echo($"[GamepadTweaks] Action: {action}, ID: {a}");
                             } catch(Exception e) {
-                                Chat.PrintError($"Retrive action id failed.");
+                                Chat.PrintError($"[GamepadTweaks] Retrive action id failed.");
                                 PluginLog.Error($"Exception: {e}");
                             }
+                            Chat.UpdateQueue();
                         });
                         return;
                     default:
@@ -222,7 +221,7 @@ namespace GamepadTweaks
 
             Commands.Dispose();
 
-            Framework.Update -= GamepadActionManager.UpdateFramework;
+            // Framework.Update -= GamepadActionManager.UpdateFramework;
             GamepadActionManager.Dispose();
 
             Config.Save();

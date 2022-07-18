@@ -107,9 +107,7 @@ namespace GamepadTweaks
             this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("F3 0F 11 05 ?? ?? ?? ?? F3 0F 10 45 ?? E8");
             this.lastComboActionPtr = this.comboTimerPtr + 0x04;
 
-            this.useActionHook.Enable();
-            this.isIconReplaceableHook.Enable();
-            this.getIconHook.Enable();
+            Enable();
         }
 
         public void UpdateFramework(Framework framework) {
@@ -241,9 +239,9 @@ namespace GamepadTweaks
 
             // PROCEDURE
             //  1. !Spell && !Ability -> exec
-            //  2. Macro : UseAction[UseType == 2] -> Delay Local -> am->UseAction[UseType == 2] -> exec
-            //  3. GtAct : UseAction[UseType == 0] -> Exec || Delay Local -> UseAction[UseType == 2] -> no delay -> exec
-            //  4. GsAct : UseAction[UseType == 0] : In Gs -> UseAction[UseType == 0] : Gs -> exec
+            //  2. Macro : UseAction[UseType == 2] -> LocalDelay -> am->UseAction[UseType == 2] -> exec
+            //  3. GtAct : UseAction[UseType == 0] -> Exec ?? LocalDelay -> am->UseAction[UseType == 2] -> exec
+            //  4. GsAct : UseAction[UseType == *] : In Gs -> UseAction[UseType == *] : Gs -> exec
             //  5. Norma : UseAction[UseType == 0] -> exec
             // PRECEDURE END
 
@@ -253,7 +251,7 @@ namespace GamepadTweaks
                 return this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
             }
 
-            // useType == 2: macro
+            // UseType == 2: macro
             // handle /ac <xx>
             if (a.UseType == 2) {
                 // GtAction in macro should execute immediately!
@@ -262,7 +260,7 @@ namespace GamepadTweaks
                 //     goto MainRet;
                 // }
 
-                if (Config.blockingAction) {
+                if (Config.actionAutoDelay) {
                     ret = this.pendingActions.Writer.TryWrite(new GameAction() {
                                     ID = originalActionID,
                                     TargetID = targetedActorID,
@@ -430,6 +428,10 @@ namespace GamepadTweaks
 
         MainRet:
             // if (!ret) return false;
+            // if (state == GamepadActionManagerState.InGamepadSelection) return false;
+            // ActionExecuted -> Start
+            // 如果Action没有被执行完成, 则不处理(例如GsAction的第一阶段)
+            if (state != GamepadActionManagerState.Start) return false;
 
             if (ret && a.Status == ActionStatus.Ready) {
                 this.LastTime = DateTime.Now;
@@ -439,7 +441,10 @@ namespace GamepadTweaks
 
             // status == NotSatisfied -> return false;
             if (a.Type == ActionType.Spell) {
-                this.executedActions.Writer.TryWrite((adjustedID, status, ret));
+                bool suc = this.executedActions.Writer.TryWrite((adjustedID, status, ret));
+                if (!suc) {
+                    PluginLog.Debug($"[UseAction] executedActions write failed.");
+                }
             }
 
             return ret;
@@ -738,7 +743,7 @@ namespace GamepadTweaks
                 }
             }
             this.useActionHook.Enable();
-        return ret;
+            return ret;
         }
 
         // private GameObject? NearestTarget(BattleNpcSubKind type = BattleNpcSubKind.Enemy)
@@ -793,6 +798,10 @@ namespace GamepadTweaks
             this.useActionHook.Enable();
             this.isIconReplaceableHook.Enable();
             this.getIconHook.Enable();
+            // make sure we don't have handler on this event.
+            // it's ok even not registed.
+            Plugin.Framework.Update -= this.UpdateFramework;
+            Plugin.Framework.Update += this.UpdateFramework;
         }
 
         public void Disable()
@@ -800,15 +809,14 @@ namespace GamepadTweaks
             this.useActionHook.Disable();
             this.isIconReplaceableHook.Disable();
             this.getIconHook.Disable();
+            Plugin.Framework.Update -= this.UpdateFramework;
         }
 
         public void Dispose()
         {
-            this.useActionHook.Disable();
+            Disable();
             this.useActionHook.Dispose();
-            this.isIconReplaceableHook.Disable();
             this.isIconReplaceableHook.Dispose();
-            this.getIconHook.Disable();
             this.getIconHook.Dispose();
             GC.SuppressFinalize(this);
         }

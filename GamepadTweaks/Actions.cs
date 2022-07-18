@@ -54,21 +54,58 @@ namespace GamepadTweaks
 
         public string Name => Names.ContainsKey(Plugin.ClientLanguage) ? Names[Plugin.ClientLanguage] : String.Empty;
         // public DateTime DelayTo = DateTime.Now;
-
         public bool Targeted => TargetID != Configuration.DefaultInvalidGameObjectID;
-
         public bool IsValid => this.ID > 0;
+        public bool IsCasting => Plugin.Player is not null && Plugin.Player.IsCasting && Plugin.Actions.Equals(Plugin.Player.CastActionId, ID);
+        // public uint CastTimeTotalMilliseconds
+        // {
+        //     get {
+        //         var cast = Plugin.Actions.CastTime(ID);
+        //         if (cast <= 0.1) {
+        //             return 0;
+        //         }
+        //         return (uint)(cast * 1000);
+        //     }
+        // }
+
+        public async Task<bool> Succeed()
+        {
+            if (!Plugin.Ready || Plugin.Player is null) return false;
+
+            var me = Plugin.Player;
+            var before = DateTime.Now;
+            if (me.IsCasting && Plugin.Actions.Equals(me.CastActionId, ID)) {
+                var current = (int)(me.CurrentCastTime * 1000);
+                var total = (int)(me.TotalCastTime * 1000);
+                var delay = 50;
+                // 滑步!!!
+                while (current < total - Configuration.GlobalCoolingDown.SlidingWindow) {
+                    await Task.Delay(delay);
+                    if (!me.IsCasting) {
+                        return false;
+                    }
+                    current += delay;
+                }
+                var diff = DateTime.Now - before;
+            }
+
+            return true;
+        }
     }
 
     public class Actions
     {
         private Dictionary<uint, uint[]> AliasInfo = new Dictionary<uint, uint[]>() {
+            // AST
             {17055, new uint[] {4401, 4402, 4403, 4404, 4405, 4406} },   // 出卡
             {25869, new uint[] {7444, 7445} }, // 出王冠卡
-            {25822, new uint[] {3582} },   // 星极超流
+
+            // SNM
+            {25822, new uint[] {3582} },    // 星极超流
             {3579,  new uint[] {25820} },   // 毁荡
-            {25883, new uint[] {25819, 25818, 25817} },    // 宝石耀
-            {25884, new uint[] {25816, 25815, 25814} },    // 宝石辉
+            {16511, new uint[] {25826} },   // 迸裂
+            {25883, new uint[] {25825, 25824, 25823, 25819, 25818, 25817, 25813, 25812, 25811, 25810, 25809, 25808} },    // 宝石耀
+            {25884, new uint[] {25829, 25828, 25827, 25816, 25815, 25814} },    // 宝石辉
             {25800, new uint[] {3581, 7427} },    //以太蓄能
         };
 
@@ -130,7 +167,7 @@ namespace GamepadTweaks
             {("zh", "野战治疗阵", 188)},
             {("zh", "生命活性法", 189)},
             {("zh", "深谋远虑之策", 7434)},
-            {("zh", "以太契约", 7423)},
+            {("zh", "以太契约", 7437)},
             {("zh", "生命回生法", 25867)},
             {("en", "Adloquium", 185)},
             {("en", "Lustrate", 189)},
@@ -142,6 +179,7 @@ namespace GamepadTweaks
             {("zh", "重劈", 31)},
             {("zh", "凶残裂", 37)},
             {("zh", "超压斧", 41)},
+            {("zh", "秘银暴风", 16462)},
             {("zh", "暴风斩", 42)},
             {("zh", "暴风碎", 45)},
             {("zh", "飞斧", 46)},
@@ -149,6 +187,8 @@ namespace GamepadTweaks
             {("zh", "铁壁", 7531)},
             {("zh", "雪仇", 7535)},
             {("zh", "下踢", 7540)},
+            {("zh", "蛮荒崩裂", 25753)},
+            {("zh", "原初的解放", 7389)},
 
             // SMN
             {("zh", "龙神附体", 3581)},
@@ -166,15 +206,29 @@ namespace GamepadTweaks
             {("zh", "能量吸收", 16508)},
             {("zh", "能量抽取", 16510)},
             {("zh", "迸裂", 16511)},
+            {("zh", "三重灾祸", 25826)},
             {("zh", "龙神迸发", 7429)},
             {("zh", "溃烂爆发", 181)},
             {("zh", "痛苦核爆", 3578)},
-            {("zh", "绿宝石毁荡", 25819)},
-            {("zh", "黄宝石毁荡", 25818)},
-            {("zh", "红宝石毁荡", 25817)},
+            {("zh", "绿宝石灾祸", 25829)},
+            {("zh", "黄宝石灾祸", 25828)},
+            {("zh", "红宝石灾祸", 25827)},
             {("zh", "绿宝石迸裂", 25816)},
             {("zh", "黄宝石迸裂", 25815)},
             {("zh", "红宝石迸裂", 25814)},
+
+            {("zh", "绿宝石之仪", 25825)},
+            {("zh", "黄宝石之仪", 25824)},
+            {("zh", "红宝石之仪", 25823)},
+            {("zh", "绿宝石毁荡", 25819)},
+            {("zh", "黄宝石毁荡", 25818)},
+            {("zh", "红宝石毁荡", 25817)},
+            {("zh", "绿宝石毁坏", 25813)},
+            {("zh", "黄宝石毁坏", 25812)},
+            {("zh", "红宝石毁坏", 25811)},
+            {("zh", "绿宝石毁灭", 25810)},
+            {("zh", "黄宝石毁灭", 25809)},
+            {("zh", "红宝石毁灭", 25808)},
         };
 
         private Dictionary<uint, GameAction> ActionsMap = new Dictionary<uint, GameAction>();
@@ -236,6 +290,19 @@ namespace GamepadTweaks
 
             return (GamepadTweaks.ActionStatus)status;
         }
+
+        // public float CastTime(uint actionID)
+        // {
+        //     float cast = 0f;
+        //     unsafe {
+        //         var am = ActionManager.Instance();
+        //         if (am != null) {
+        //             cast = am->GetAdjustedCastTime(ActionType(actionID), actionID);
+        //         }
+        //     }
+        //     return cast;
+
+        // }
 
         public float RecastTimeRemain(uint actionID)
         {

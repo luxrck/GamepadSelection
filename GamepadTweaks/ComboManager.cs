@@ -50,29 +50,27 @@ namespace GamepadTweaks
 
     public class ComboAction
     {
-        public uint ID = 0;
+        public GameAction Action = null!;
         public ComboActionType Type = ComboActionType.Single;
         public int MinimumCount = 1;
         public int MaximumCount = 1;
         public int Group = 0;
         public int Count = 0;
-        public bool Executed = false;
         public DateTime LastTime = DateTime.Now;
 
         public Actions Actions = new Actions();
 
-        public void Restore() { Count = 0; Executed = false; }
+        public uint ID => Action.ID;
+        public bool IsCasting => Action.IsCasting;
+        public bool IsValid => Action.IsValid;
+        public bool Finished => Count >= MaximumCount;
+        public bool Executed => Count > 0;
+        // public uint CastTimeTotalMilliseconds => Action.CastTimeTotalMilliseconds;
 
-        public void Update()
-        {
-            Executed = true;
-            Count += 1;
-        }
+        public void Restore() => Count = 0;
+        public void Update() => Count += 1;
 
-        // public bool CanSkip()
-        // {
-        //     var recast = Actions.RecastTimeRemain(ID);
-        // }
+        public async Task<bool> Succeed() => await Action.Succeed();
     }
 
     public class ComboGroup
@@ -128,7 +126,8 @@ namespace GamepadTweaks
 
         public async Task<bool> StateUpdate(uint actionID, ActionStatus status = ActionStatus.Ready, bool succeed = true, DateTime now = default(DateTime))
         {
-            if (!Plugin.Ready) return false;
+            // if (!succeed) return false;
+            if (!Plugin.Ready || !Plugin.Player) return false;
             if (status == ActionStatus.Locking) return false;
 
             var index = ComboActions.FindIndex(CurrentIndex, x => Actions.Equals(x.ID, actionID));
@@ -145,7 +144,8 @@ namespace GamepadTweaks
             var crgroup = Actions.RecastGroup(cadjust);
             var cremain = Actions.RecastTimeRemain(cadjust);
 
-            if (status != ActionStatus.Ready && status != ActionStatus.Pending && status != ActionStatus.NotSatisfied)
+            // only handle: Ready, Pending, NotSatisfied and NotLearned
+            if (status != ActionStatus.Ready && status != ActionStatus.Pending && status != ActionStatus.NotSatisfied && status != ActionStatus.NotLearned)
                 return true;
 
             int animationDelay = 400;
@@ -201,8 +201,23 @@ namespace GamepadTweaks
                 return true;
             }
 
+            // succeed: UseAction成功执行. 由于是non-blocking, 不能表示之后Action真的成功了.
+            // Action.Succeed: 如果需要咏唱, 则代表成功咏唱, 即Action真正被成功施放.
+            if (caction.IsCasting) {
+                if (!await caction.Succeed()) {
+                    PluginLog.Debug($"[ComboStateUpdate][Casting] group: {GroupID}, action: {caction.ID} failed.");
+                    this.actionLockHighPriority.Release();
+                    this.actionLock.Release();
+                    return false;
+                } else {
+                    animationDelay = 50;    // just in case.
+                }
+            }
+
+            // 到这里只存在三种状态: Ready, Pending, NotSatisfied
             switch (Type)
             {
+                // m l s lb sb
                 case ComboType.Manual:
                     index = (index + 1) % ComboActions.Count;
                     break;
@@ -246,7 +261,7 @@ namespace GamepadTweaks
                             case ComboActionType.SingleSkipable:
                             case ComboActionType.MultiSkipable:
                                 if (cstatus == ActionStatus.NotSatisfied && caction.Executed || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
-                                    index += 1; caction.Restore();
+                                    index += 1; // caction.Restore();
                                 }
                                 break;
                             // 全跳
@@ -282,10 +297,11 @@ namespace GamepadTweaks
                                     index += 1; animationDelay = 0;
                                 } else if (cstatus == ActionStatus.Ready) {
                                     if (succeed) {
-                                        caction.Count += 1; caction.Executed = true;
+                                        // caction.Count += 1;
+                                        caction.Update();
                                     }
-                                    if (caction.Count >= caction.MaximumCount) {
-                                        index += 1; caction.Restore();
+                                    if (caction.Finished) { // Count >= MaximumCount
+                                        index += 1; // caction.Restore();
                                     } else if (caction.Count >= caction.MinimumCount) {
                                         var naction = ComboActions[(index+1)%ComboActions.Count];
                                         var nadjust = Actions.AdjustedActionID(naction.ID);
@@ -293,39 +309,43 @@ namespace GamepadTweaks
                                         var nrgroup = Actions.RecastGroup(nadjust);
                                         var nremain = Actions.RecastTimeRemain(nadjust);
                                         if (nstatus == ActionStatus.Ready || nrgroup == crgroup || nstatus == ActionStatus.Pending && nremain <= Configuration.GlobalCoolingDown.TotalSeconds) {
-                                            index += 1; caction.Restore();
+                                            index += 1; // caction.Restore();
                                         }
                                     }
                                 } else if (cstatus == ActionStatus.NotSatisfied) {
                                     if (caction.Type == ComboActionType.Single || caction.Type == ComboActionType.Multi) {
-                                        if (caction.Executed) {
-                                            index += 1; caction.Restore(); animationDelay = 0;
+                                        if (caction.Executed) { // Count > 0
+                                            index += 1; animationDelay = 0; // caction.Restore();
                                         } else {
-                                            caction.Executed = true;    // <---- 防止卡住. 点两次
+                                            // caction.Executed = true;
+                                            caction.Update(); // <---- 防止卡住. 点两次
                                         }
                                     } else if (caction.Type == ComboActionType.SingleSkipable || caction.Type == ComboActionType.MultiSkipable || caction.Type == ComboActionType.Skipable) {
-                                        index += 1; caction.Restore(); animationDelay = 0;  // 点一次
+                                        index += 1; animationDelay = 0; // caction.Restore();  // 点一次
                                     }
                                 }
                                 break;
                             case ComboActionType.Blocking:  // Pending ?
                                 if (cstatus == ActionStatus.Ready) {
-                                    if (succeed) index += 1;
+                                    if (succeed)
+                                        index += 1;
                                 } else {
-                                    caction.Count += 1;
-                                    if (caction.Count >= 7) {   // <--- 点七次
-                                        index += 1; caction.Restore();
+                                    // caction.Count += 1;
+                                    caction.Update();
+                                    if (caction.Count >= 10) {   // <--- 点十次
+                                        index += 1; // caction.Restore();
                                     }
                                 }
                                 break;
                             case ComboActionType.Group:
                                 if (cstatus == ActionStatus.Ready) {
-                                    if (succeed) index += 1;
+                                    if (succeed)
+                                        index += 1;
                                 }
                                 break;
                         }
 
-                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {Actions[caction.ID]} {caction.Executed}, status: {cstatus}, type: {caction.Type} , crgroup: {crgroup}, remain: {cremain}");
+                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {Actions[caction.ID]}, id: {caction.ID}, exec?: {caction.Executed}, status: {cstatus}, type: {caction.Type}, count: {caction.Count}, ucount: {caction.MaximumCount}, crgroup: {crgroup}, remain: {cremain}");
                     }
                     break;
                 case ComboType.Async:
@@ -340,11 +360,8 @@ namespace GamepadTweaks
             // a1! && Ready -> CurrentIndex++
             // wait 20ms
             // a! && Pending -> ??? 应该忽略这个
-            if (originalIndex != -1 && originalIndex != index) {
-                var me = Plugin.Player;
-                if (me is not null && me.IsCasting && animationDelay > 0) {
-                    animationDelay = Math.Max((int)((me.TotalCastTime - me.CurrentCastTime) * 1000) + 100, animationDelay);
-                }
+            if (originalIndex != -1 && originalIndex != index && CurrentIndex != index) {
+                await Task.Delay(animationDelay);
 
                 // if (animationDelay > 0)
                 PluginLog.Debug($"[ComboStateUpdate] animationDelay: {animationDelay}ms. {Actions.Name(ComboActions[CurrentIndex].ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)}");
@@ -352,13 +369,16 @@ namespace GamepadTweaks
                 // 反正能力技之间的插入也有时间间隔, 不如等一等, 放动画
                 await Task.Delay(animationDelay);
 
+                // 切换到下一个action之前把当前action的状态复位
+                caction.Restore();
                 CurrentIndex = index % ComboActions.Count;
 
                 // CurrentIndex更新之后不代表就立刻转移到了下一个技能, 到GetIcon更新技能图标还有一段时间.
-                // 继续sleep, 到图标更新完成.
+                // 继续sleep, 留给GetIcon一点时间, 到图标更新完成.
                 await Task.Delay(100);
 
-                // if (cstatus == ActionStatus.Ready)
+                // 应该做出假设: 此时已经成功转移到下一个技能, 并且技能图标已经更新.
+                // 那么需要把这之前等待的其它Task全部清除. 只处理在这之后发出的Task.
                 this.LastTime = DateTime.Now;
             }
 

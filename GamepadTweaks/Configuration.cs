@@ -13,8 +13,10 @@ namespace GamepadTweaks
         public static uint DefaultInvalidGameObjectID = 3758096384U;
         public class GlobalCoolingDown
         {
-            public static float TotalSeconds => 2.7f;
-            public static uint TotalMilliseconds => 2700;
+            public static float TotalSeconds = 2.7f;
+            public static uint TotalMilliseconds = 2700;
+            public static uint AnimationWindow = 700;
+            public static uint SlidingWindow = 700;
         }
 
         int IPluginConfiguration.Version { get; set; }
@@ -25,7 +27,7 @@ namespace GamepadTweaks
         [JsonProperty]
         public bool autoTargeting { get; set; } = false;
         [JsonProperty]
-        public bool blockingAction { get; set; } = false;
+        public bool actionAutoDelay { get; set; } = false;
         [JsonProperty]
         public bool alwaysTargetingNearestEnemy { get; set; } = false;
         [JsonProperty]
@@ -50,7 +52,7 @@ namespace GamepadTweaks
         public ComboManager ComboManager = null!;
 
         public static string Root => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? String.Empty;
-        public static string FontFile => Path.Combine(Root, "sarasa-fixed-sc-regular.ttf");
+        public static string FontFile => Path.Combine(Root, "sarasa-fixed-sc-regular.subset.ttf");
         public static string GlyphRangesFile => Path.Combine(Root, "chars.txt");
         public static string ActionFile => Path.Combine(Root, "Actions.json");
         public static string ConfigFile => Plugin.PluginInterface.ConfigFile.ToString();
@@ -123,7 +125,7 @@ namespace GamepadTweaks
 
                     this.alwaysInParty = config.alwaysInParty;
                     this.autoTargeting = config.autoTargeting;
-                    this.blockingAction = config.blockingAction;
+                    this.actionAutoDelay = config.actionAutoDelay;
                     this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
                     this.gs = config.gs;
                     this.gtoff = config.gtoff;
@@ -241,14 +243,21 @@ namespace GamepadTweaks
                         PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} iscombo: {comboID}");
 
                         return new ComboAction() {
-                            ID = id,
+                            Action = new GameAction() { ID = id },
                             Type = comboActionType,
                             MinimumCount = minCount,
                             MaximumCount = maxCount,
                             Group = comboID,
                         };
                     }).ToList();
+
                     var groupID = Actions[ss[2].Trim()];
+
+                    // 如果有不合法的action, 此链作废
+                    if (groupID == 0 || comboActions.Any(x => !x.IsValid)) {
+                        continue;
+                    }
+
                     PluginLog.Debug($"\tin {comboType} : {groupID} {ss[2].Trim()}");
                     cg.Add((groupID, comboActions, comboType));
                 }

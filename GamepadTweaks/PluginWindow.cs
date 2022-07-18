@@ -130,6 +130,7 @@ namespace GamepadTweaks
         public void Dispose()
         {
             UiBuilder.BuildFonts -= BuildFont;
+            GC.SuppressFinalize(this);
         }
     }
 }

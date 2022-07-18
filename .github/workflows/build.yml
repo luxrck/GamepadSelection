@@ -1,0 +1,69 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  Name: GamepadTweaks
+  ReleaseDir: GamepadTweaks\bin\Release\GamepadTweaks\publish\
+  DalamudLibPath: ../../lib/dalamud
+
+jobs:
+  build_api6:
+
+    runs-on: windows-latest
+
+    steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: |
+          5.0.x
+          6.0.x
+    - name: Download Dalamud(goatcorp)
+      run: |
+        cd ..
+        curl -o latest.zip https://goatcorp.github.io/dalamud-distrib/latest.zip
+        mkdir -p lib/dalamud
+        unzip latest.zip -d lib/dalamud
+    - uses: actions/checkout@v2
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet publish --configuration Release
+    - uses: actions/upload-artifact@v2
+      with:
+        name: build.api6.zip
+        path: ${{ env.ReleaseDir }}
+        if-no-files-found: error
+
+  build_api5:
+
+    runs-on: windows-latest
+
+    steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: |
+          5.0.x
+          6.0.x
+    - name: Download Dalamud(ottercorp)
+      run: |
+        cd ..
+        curl -o latest.zip https://file.ffxiv.wang/dalamud_CN_runtime/dalamud_6.3.0.12.zip
+        mkdir -p lib/dalamud
+        unzip latest.zip -d lib/dalamud
+    - uses: actions/checkout@v2
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet publish --configuration Release
+    - uses: actions/upload-artifact@v2
+      with:
+        name: build.api5.zip
+        path: ${{ env.ReleaseDir }}
+        if-no-files-found: error

@@ -1,4 +1,7 @@
 ## GamepadTweaks
+
+❗: This plugin is under heavy development and may contains many potential bugs, so use it at your own risk.
+
 ##### Gamepad Selection
 Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.
 
@@ -11,6 +14,8 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 ##### Gtoff
 Support and extend `<gtoff>` like casting type using gamepad. If we already target a GameObject (enemy, party member, etc), then it will use the position of the target (`/ac xx <t>`). Otherwise it acts just like `<gtoff>` macros (`/ac xx <gtoff>`).
 
+vs. `/ac xx <t>`: We could put GtAction into queue and execute it when ready instead of must wait a certain time to manually trigger that action. If `actionAutoDelay == true`, these two are same.
+
 ##### Targeting
 Auto targeting the nearest enemy (if not) when casting actions. Damage actions will ignore the **SoftTarget** now, only Buffs could take use of it.
 
@@ -18,7 +23,7 @@ Auto targeting the nearest enemy (if not) when casting actions. Damage actions w
 Combo support like [XivComboPlugin](https://github.com/attickdoor/XIVComboPlugin.git), but could take use of our own tweaks.
 
 ##### Macro
-Serial execute per line in macro like any other script language, auto delay after command executed.
+Auto delay `/ac` commands to the right time.
 
 ### CLI
 
@@ -46,7 +51,7 @@ Serial execute per line in macro like any other script language, auto delay afte
   "alwaysTargetingNearestEnemy": false,
 
   // Serial execute /ac commands in macro.
-  "blockingAction": false,
+  "actionAutoDelay": false,
 
   // Emulate <gtoff>
   // Casting direcly instead of entering ground targeting mode.
