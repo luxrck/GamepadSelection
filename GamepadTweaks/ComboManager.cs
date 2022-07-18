@@ -40,6 +40,8 @@ namespace GamepadTweaks
         // <action> !
         Blocking = 0x08,
         Ability = 0x10,
+        // real combo in game. shouldn't skip or block
+        Group = 0x20,
         // <action> ?
         SingleSkipable = Single | Skipable,
         // <action> {a,b}?
@@ -52,6 +54,7 @@ namespace GamepadTweaks
         public ComboActionType Type = ComboActionType.Single;
         public int MinimumCount = 1;
         public int MaximumCount = 1;
+        public int Group = 0;
         public int Count = 0;
         public bool Executed = false;
         public DateTime LastTime = DateTime.Now;
@@ -79,13 +82,15 @@ namespace GamepadTweaks
         public List<ComboAction> ComboActions;
         public ComboType Type;
 
-        public Actions Actions = new Actions();
+        public Actions Actions = Plugin.Actions;
         public DateTime LastTime = DateTime.Now;
 
         private TargetManager TargetManager = Plugin.TargetManager;
 
         private SemaphoreSlim actionLock = new SemaphoreSlim(1, 1);
         private SemaphoreSlim actionLockHighPriority = new SemaphoreSlim(1, 1);
+
+        private bool InComboState => Plugin.GamepadActionManager.InComboState;
 
         public ComboGroup(uint id, List<ComboAction> actions, string ctype = "l")
         {
@@ -140,11 +145,6 @@ namespace GamepadTweaks
             var crgroup = Actions.RecastGroup(cadjust);
             var cremain = Actions.RecastTimeRemain(cadjust);
 
-            if (cstatus == ActionStatus.NotLearned) {
-                CurrentIndex = (index + 1) % ComboActions.Count;
-                return true;
-            }
-
             if (status != ActionStatus.Ready && status != ActionStatus.Pending && status != ActionStatus.NotSatisfied)
                 return true;
 
@@ -159,7 +159,7 @@ namespace GamepadTweaks
             // a         b
             //      a
             //                a
-            if (index == -1) {
+            if (originalIndex == -1) {
                 if (Type != ComboType.Ochain) {
                     return false;
                 } else {
@@ -190,6 +190,17 @@ namespace GamepadTweaks
                 }
             }
 
+            // a1 a2[notlearned] a3
+            // 如果a1 a2是同一group, a1执行完之后, 查询a2的status将会是pending或locking
+            // 等到a2真正可以被执行的时候(比如下一个gcd开始), 它的status才会变成ready(或notlearned等)
+            if (cstatus == ActionStatus.NotLearned) {
+                PluginLog.Debug($"[ComboStateUpdate] action not learned. {Actions.Name(caction.ID)} at {CurrentIndex} of Group: {GroupID}. Triggerd by {actionID}");
+                CurrentIndex = (index + 1) % ComboActions.Count;
+                this.actionLockHighPriority.Release();
+                this.actionLock.Release();
+                return true;
+            }
+
             switch (Type)
             {
                 case ComboType.Manual:
@@ -198,7 +209,7 @@ namespace GamepadTweaks
                 case ComboType.Strict:
                     if (!Actions.Equals(ComboActions[CurrentIndex].ID, actionID))
                         break;
-                    if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
+                    if (status == ActionStatus.Ready || status == ActionStatus.NotSatisfied) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
                     } else if (cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
@@ -208,19 +219,19 @@ namespace GamepadTweaks
                     index = CurrentIndex;
                     if (!Actions.Equals(ComboActions[CurrentIndex].ID, actionID))
                         break;
-                    if ((status == ActionStatus.Ready || status == ActionStatus.NotLearned)) {
+                    if (status == ActionStatus.Ready) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
                     }
                     break;
                 case ComboType.Linear:
-                    if ((status == ActionStatus.Ready || status == ActionStatus.NotSatisfied || status == ActionStatus.NotLearned)) {
+                    if (status == ActionStatus.Ready || status == ActionStatus.NotSatisfied) {
                         index = (index + 1) % ComboActions.Count;
-                    } else if (Type == ComboType.Linear && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                    } else if (cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                         index = (index + 1) % ComboActions.Count;
                     }
                     break;
                 case ComboType.LinearBlocked:
-                    if ((status == ActionStatus.Ready || status == ActionStatus.NotLearned)) {
+                    if (status == ActionStatus.Ready) {
                         index = (index + 1) % ComboActions.Count;
                     }
                     break;
@@ -228,6 +239,7 @@ namespace GamepadTweaks
                     // usually by GamepadActionManager.UpdateFramework
                     // or actions in other group
                     if (originalIndex == -1) {
+                        originalIndex = index;
                         switch (caction.Type)
                         {
                             // 跳NotSatisfied需要确保action已经执行
@@ -241,6 +253,18 @@ namespace GamepadTweaks
                             case ComboActionType.Skipable:
                                 if (cstatus == ActionStatus.NotSatisfied || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
                                     index += 1;
+                                }
+                                break;
+                            case ComboActionType.Group:
+                                if (!InComboState) {
+                                    var cgroup = caction.Group;
+                                    if (cgroup <= 0) break;
+                                    for (; index >= 0; index--) {
+                                        if (ComboActions[index].Group != cgroup) {
+                                            break;
+                                        }
+                                    }
+                                    index++;
                                 }
                                 break;
                         }
@@ -289,9 +313,14 @@ namespace GamepadTweaks
                                     if (succeed) index += 1;
                                 } else {
                                     caction.Count += 1;
-                                    if (caction.Count >= 5) {   // <--- 点五次
+                                    if (caction.Count >= 7) {   // <--- 点七次
                                         index += 1; caction.Restore();
                                     }
+                                }
+                                break;
+                            case ComboActionType.Group:
+                                if (cstatus == ActionStatus.Ready) {
+                                    if (succeed) index += 1;
                                 }
                                 break;
                         }
@@ -317,8 +346,8 @@ namespace GamepadTweaks
                     animationDelay = Math.Max((int)((me.TotalCastTime - me.CurrentCastTime) * 1000) + 100, animationDelay);
                 }
 
-                if (animationDelay > 0)
-                    PluginLog.Debug($"animationDelay: {animationDelay}");
+                // if (animationDelay > 0)
+                PluginLog.Debug($"[ComboStateUpdate] animationDelay: {animationDelay}ms. {Actions.Name(ComboActions[CurrentIndex].ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)}");
 
                 // 反正能力技之间的插入也有时间间隔, 不如等一等, 放动画
                 await Task.Delay(animationDelay);

@@ -36,7 +36,7 @@ namespace GamepadTweaks
         ActionExecuted = 3,
     }
 
-    class GamepadActionManager : IDisposable
+    public class GamepadActionManager : IDisposable
     {
         public static Dictionary<string, ushort> ButtonMap = new Dictionary<string, ushort> {
             {"up", (ushort)GamepadButtons.DpadUp},
@@ -64,6 +64,7 @@ namespace GamepadTweaks
         });
         public DateTime LastTime;
         public uint LastActionID;
+        public bool InComboState => Marshal.PtrToStructure<float>(this.comboTimerPtr) > 0f;
 
         private Channel<(uint, ActionStatus, bool)> executedActions = Channel.CreateUnbounded<(uint, ActionStatus, bool)>();
         private Channel<GameAction> pendingActions = Channel.CreateUnbounded<GameAction>();
@@ -241,7 +242,7 @@ namespace GamepadTweaks
             // PROCEDURE
             //  1. !Spell && !Ability -> exec
             //  2. Macro : UseAction[UseType == 2] -> Delay Local -> am->UseAction[UseType == 2] -> exec
-            //  3. GtAct : UseAction[UseType == 0] -> Delay -> UseAction[UseType == 2] -> no delay -> exec
+            //  3. GtAct : UseAction[UseType == 0] -> Exec || Delay Local -> UseAction[UseType == 2] -> no delay -> exec
             //  4. GsAct : UseAction[UseType == 0] : In Gs -> UseAction[UseType == 0] : Gs -> exec
             //  5. Norma : UseAction[UseType == 0] -> exec
             // PRECEDURE END
@@ -397,7 +398,7 @@ namespace GamepadTweaks
                             }
 
                             Func<int, string> _S = (x) => Convert.ToString(x, 2).PadLeft(8, '0');
-                            PluginLog.Debug($"[{this.state}], PartyID: {PartyList.PartyId}, Length: {pmap.Count}, originalIndex: {gsTargetedActorIndex}, index: {gsRealTargetedActorIndex}, btn: {_S(buttons)}, savedBtn: {_S(this.savedButtonsPressed)}, origBtn: {_S(ginput->ButtonsPressed & 0xff)}, reptBtn: {_S((ginput->ButtonsRepeat & 0xff))}");
+                            PluginLog.Debug($"[UseAction][{this.state}], PartyID: {PartyList.PartyId}, Length: {pmap.Count}, originalIndex: {gsTargetedActorIndex}, index: {gsRealTargetedActorIndex}, btn: {_S(buttons)}, savedBtn: {_S(this.savedButtonsPressed)}, origBtn: {_S(ginput->ButtonsPressed & 0xff)}, reptBtn: {_S((ginput->ButtonsRepeat & 0xff))}");
                         }
                     } catch(Exception e) {
                         PluginLog.Error($"Exception: {e}");
@@ -408,7 +409,7 @@ namespace GamepadTweaks
                     status = Actions.ActionStatus(o.ID, o.Type, targetedActorID);
 
                     ret = this.useActionHook.Original(actionManager, (uint)o.Type, o.ID, o.TargetID, o.param, o.UseType, o.pvp, o.a8);
-                    PluginLog.Debug($"[{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
+                    PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
 
                     this.savedButtonsPressed = 0;
 
@@ -420,7 +421,7 @@ namespace GamepadTweaks
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                         this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        PluginLog.Debug($"[{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
+                        PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
                     }
 
                     this.state = GamepadActionManagerState.Start;

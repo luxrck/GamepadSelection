@@ -15,6 +15,7 @@ namespace GamepadTweaks
 
         private ImFontPtr Font;
         private bool FontLoaded = false;
+        private bool FontLoadFailed = false;
         private string errorMessage = String.Empty;
 
         public PluginWindow() : base("GamepadTweaks")
@@ -31,20 +32,33 @@ namespace GamepadTweaks
         private void BuildFont()
         {
             if (!Plugin.Ready) return;
+            if (FontLoadFailed) return;
 
             // Do not crash!
             if (!File.Exists(Configuration.FontFile)) {
-                PluginLog.Error($"Font file not found!: {Configuration.FontFile}");
+                PluginLog.Log($"Font file not found!: {Configuration.FontFile}");
                 return;
             }
 
             try {
-                Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Configuration.FontFile, 24.0f, null, ImGui.GetIO().Fonts.GetGlyphRangesChineseFull());
-                // Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Config.FontFile, 24.0f);
+                var chars = File.ReadAllText(Configuration.GlyphRangesFile);
+                unsafe {
+                    // 为什不直接GetGlyphRangesChineseFull()呢?
+                    // 因为中文字符集太大, 字号设置比较高的时候游戏会爆掉.
+                    var builder = new ImFontGlyphRangesBuilderPtr(ImGuiNative.ImFontGlyphRangesBuilder_ImFontGlyphRangesBuilder());
+                    builder.AddText(chars);     // 中文7000字符集
+                    builder.AddText("\n\r\t "); // 空白字符
+                    builder.BuildRanges(out ImVector ranges);
+                    Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Configuration.FontFile, 24.0f, null, ranges.Data);
+                    // Font = ImGui.GetIO().Fonts.AddFontFromFileTTF(Configuration.FontFile, 24.0f, null, ImGui.GetIO().Fonts.GetGlyphRangesChineseFull());
+                }
                 PluginLog.Debug($"Load Monospace Font: {Configuration.FontFile}");
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}. Errors in loading: {Configuration.FontFile}");
+                FontLoadFailed = true;
+                return;
             }
+
             FontLoaded = true;
         }
 
@@ -64,8 +78,6 @@ namespace GamepadTweaks
                                      10000,
                                      new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - ImGui.GetFrameHeight() - ImGui.GetFontSize() * 2.0f),
                                      ImGuiInputTextFlags.AllowTabInput);
-
-            if (FontLoaded) ImGui.PopFont();
 
             if (this.errorMessage != "") {
                 if (ImGui.BeginPopupModal("Error")) {
@@ -94,6 +106,8 @@ namespace GamepadTweaks
                     IsOpen = false;
                 }
             }
+
+            if (FontLoaded) ImGui.PopFont();
         }
 
         private bool Save()

@@ -51,6 +51,7 @@ namespace GamepadTweaks
 
         public static string Root => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? String.Empty;
         public static string FontFile => Path.Combine(Root, "sarasa-fixed-sc-regular.ttf");
+        public static string GlyphRangesFile => Path.Combine(Root, "chars.txt");
         public static string ActionFile => Path.Combine(Root, "Actions.json");
         public static string ConfigFile => Plugin.PluginInterface.ConfigFile.ToString();
 
@@ -77,12 +78,12 @@ namespace GamepadTweaks
                 var content = File.ReadAllText(Plugin.PluginInterface.ConfigFile.ToString());
                 config = JsonConvert.DeserializeObject<Configuration>(content) ?? new Configuration();
                 config.content = content;
+                config.UpdateActions();
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 config = new Configuration();
+                config.Update();
             }
-
-            config.UpdateActions();
 
             return config;
         }
@@ -183,7 +184,7 @@ namespace GamepadTweaks
                     var ss = s.Split(":");
                     var comboType = ss[0].Trim();
                     var comboActions = ss[1].Split("->").Where(a => !String.IsNullOrEmpty(a) && !String.IsNullOrWhiteSpace(a)).Select(a => {
-                        var pattern = new Regex(@"(?<action>[\w\s]+\w)(?<type>[\d\,\{\}\*\!\?]+)?", RegexOptions.Compiled);
+                        var pattern = new Regex(@"(?<action>[\w\s]+\w)(?<type>[\d\,\{\}\*\!\?#]+)?", RegexOptions.Compiled);
                         var match = pattern.Match(a.Trim());
                         var action = match.Groups.ContainsKey("action") ? match.Groups["action"].ToString().Trim() : "";
                         var type = match.Groups.ContainsKey("type") ? match.Groups["type"].ToString().Trim() : "";
@@ -191,6 +192,7 @@ namespace GamepadTweaks
                         var comboActionType = ComboActionType.Single;
                         int minCount = 1;
                         int maxCount = 1;
+                        var comboID = 0;
                         switch (type)
                         {
                             case "":
@@ -218,22 +220,36 @@ namespace GamepadTweaks
                                         if (sks == "?")
                                             comboActionType = ComboActionType.MultiSkipable;
                                     }
+                                } else if (type.StartsWith("#")) {
+                                    comboActionType = ComboActionType.Group;
+                                    var gs = type.Substring(1);
+                                    if (String.IsNullOrEmpty(gs)) {
+                                        comboID = 1;
+                                    } else {
+                                        try {
+                                            comboID = Int32.Parse(type.Substring(1));
+                                        } catch(Exception e) {
+                                            PluginLog.Debug($"Exception: {e}");
+                                            comboID = 1;
+                                        }
+                                    }
                                 }
                                 break;
                         }
                         var id = Actions[action.Trim()];
 
-                        PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount}");
+                        PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} iscombo: {comboID}");
 
                         return new ComboAction() {
                             ID = id,
                             Type = comboActionType,
                             MinimumCount = minCount,
                             MaximumCount = maxCount,
+                            Group = comboID,
                         };
                     }).ToList();
                     var groupID = Actions[ss[2].Trim()];
-                    PluginLog.Debug($"{comboType} : {groupID} {ss[2].Trim()}");
+                    PluginLog.Debug($"\tin {comboType} : {groupID} {ss[2].Trim()}");
                     cg.Add((groupID, comboActions, comboType));
                 }
                 this.ComboManager = new ComboManager(cg);

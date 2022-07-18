@@ -33,8 +33,7 @@ namespace GamepadTweaks
         [PluginService] public static TargetManager TargetManager { get; private set; } = null!;
         [PluginService] public static Framework Framework { get; private set; } = null!;
 
-        public static XivCommonBase XivCommon { get; private set; } = null!;
-        public static PluginCommandManager<Plugin> Commands { get; private set; } = null!;
+        public static XivCommonBase XivCommon = new XivCommonBase();
 
         public static string ClientLanguage => ClientState is null ? "zh" : ClientState.ClientLanguage switch {
             Dalamud.ClientLanguage.ChineseSimplified => "zh",
@@ -45,23 +44,22 @@ namespace GamepadTweaks
 
         public string Name => "Gamepad Tweaks (for Healers)";
 
+        public static GamepadActionManager GamepadActionManager{ get; private set; } = null!;
         public static Configuration Config { get; private set; } = null!;
         public static Actions Actions = new Actions();
 
-        private PluginWindow Window { get; set; }
-        private WindowSystem WindowSystem { get; set; }
-
-        private GamepadActionManager GamepadActionManager;
+        public PluginWindow Window { get; set; }
+        public WindowSystem WindowSystem { get; set; }
+        public PluginCommandManager<Plugin> Commands;
 
         public Plugin(
             DalamudPluginInterface pi,
             CommandManager commands)
         {
-            XivCommon = new XivCommonBase();
             Config = Configuration.Load();
-
             // Load all of our commands
             Commands = new PluginCommandManager<Plugin>(this, commands);
+
             GamepadActionManager = new GamepadActionManager();
 
             // Initialize the UI

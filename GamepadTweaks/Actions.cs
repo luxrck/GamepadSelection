@@ -200,15 +200,10 @@ namespace GamepadTweaks
         public bool Contains(string action) => ActionsInfo.Any(x => x.Name == action);
         public bool Equals(uint a1, uint a2) => BaseActionID(a1) == BaseActionID(a2);
 
-        public uint this[string a]
-        {
-            get => Contains(a) ? ActionsInfo.First(x => x.Name == a).ID : 0;
-        }
-
-        public string this[uint i]
-        {
-            get => ActionsMap.ContainsKey(i) ? ActionsMap[i].Name : String.Empty;
-        }
+        public uint this[string a] => Contains(a) ? ActionsInfo.First(x => x.Name == a).ID : 0;
+        public string this[uint i] => ActionsMap.ContainsKey(i) ? ActionsMap[i].Name : String.Empty;
+        public uint ID(string a) => this[a];
+        public string Name(uint i) => this[i];
 
         public uint BaseActionID(uint actionID) => AliasMap.ContainsKey(actionID) ? AliasMap[actionID] : actionID;
         public FFXIVClientStructs.FFXIV.Client.Game.ActionType ActionType(uint actionID) => FFXIVClientStructs.FFXIV.Client.Game.ActionType.Spell;
