@@ -1,6 +1,8 @@
 ## GamepadTweaks
 
-❗: This plugin is under heavy development and may contains many potential bugs, so use it at your own risk.
+[![Build](https://img.shields.io/github/workflow/status/luxrck/GamepadTweaks/Build?style=for-the-badge)](https://github.com/luxrck/GamepadTweaks/.github/workflows/build.yml)
+
+❗: This plugin is under heavy development now and may contains many potential bugs, so use at your own risk.
 
 ##### Gamepad Selection
 Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.
@@ -14,7 +16,7 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 ##### Gtoff
 Support and extend `<gtoff>` like casting type using gamepad. If we already target a GameObject (enemy, party member, etc), then it will use the position of the target (`/ac xx <t>`). Otherwise it acts just like `<gtoff>` macros (`/ac xx <gtoff>`).
 
-vs. `/ac xx <t>`: We could put GtAction into queue and execute it when ready instead of must wait a certain time to manually trigger that action. If `actionAutoDelay == true`, these two are same.
+vs. `/ac xx <t>`: We put GtAction into queue and execute it when ready instead of must wait a certain time to manually trigger that action. If `actionAutoDelay == true`, these two are same.
 
 ##### Targeting
 Auto targeting the nearest enemy (if not) when casting actions. Damage actions will ignore the **SoftTarget** now, only Buffs could take use of it.
@@ -106,4 +108,4 @@ Auto delay `/ac` commands to the right time.
 
 ### Pre-included Actions
 
-See [Actions.cs](GamepadTweaks/Actions.cs)
+See [Actions.cs](GamepadTweaks/Actions.cs), which is very incomplement. Full Actions could be seen at [Actions.csv](https://github.com/xivapi/ffxiv-datamining/csv/Action.csv) for XivGlobal or [Actions.CN.csv](https://github.com/thewakingsands/ffxiv-datamining-cn/Action.csv) for XivCN.
