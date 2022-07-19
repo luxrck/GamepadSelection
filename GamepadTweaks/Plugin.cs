@@ -36,9 +36,11 @@ namespace GamepadTweaks
         public static XivCommonBase XivCommon = new XivCommonBase();
 
         public static string ClientLanguage => ClientState is null ? "zh" : ClientState.ClientLanguage switch {
-            Dalamud.ClientLanguage.ChineseSimplified => "zh",
+            // Dalamud.ClientLanguage.ChineseSimplified => "zh",
             Dalamud.ClientLanguage.English => "en",
             Dalamud.ClientLanguage.Japanese => "jp",
+            Dalamud.ClientLanguage.French => "fr",
+            Dalamud.ClientLanguage.German => "de",
             _ => "zh",
         };
 

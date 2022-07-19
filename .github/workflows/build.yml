@@ -8,8 +8,8 @@ on:
 
 env:
   Name: GamepadTweaks
-  ReleaseDir: GamepadTweaks\bin\Release\GamepadTweaks\publish\
-  DalamudLibPath: ../../lib/dalamud
+  ReleaseDir: GamepadTweaks\bin\Release\publish\
+  DalamudLibPath: ../../lib/dalamud/
 
 jobs:
   build_api6:
@@ -54,7 +54,7 @@ jobs:
     - name: Download Dalamud(ottercorp)
       run: |
         cd ..
-        curl -o latest.zip https://file.ffxiv.wang/dalamud_CN_runtime/dalamud_6.3.0.12.zip
+        curl -o latest.zip https://raw.githubusercontent.com/ottercorp/dalamud-distrib/main/net5/latest.zip
         mkdir -p lib/dalamud
         unzip latest.zip -d lib/dalamud
     - uses: actions/checkout@v2
