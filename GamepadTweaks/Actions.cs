@@ -2,6 +2,8 @@ using Dalamud;
 using Dalamud.Game.ClientState;
 using Dalamud.Logging;
 
+using System.Runtime.InteropServices;
+
 using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace GamepadTweaks
@@ -19,6 +21,8 @@ namespace GamepadTweaks
     //     Ability = 0x04,
     // }
 
+    // ac1 ac2 b1 d1
+    // ac1 -> [animation : Locking] -> [before next gcd : Pending] -> []
     public enum ActionStatus : uint
     {
         Ready = 0,
@@ -26,15 +30,16 @@ namespace GamepadTweaks
         Unk_571 = 571,
         NotSatisfied = 572,
         NotLearned = 573,
-        // 咏唱时间内. 不会被自动加入队列
+        // 咏唱时间内
         Locking = 580,
         Unk_581 = 581,
-        // 咏唱时间段外, 复唱时间内. 可以被加入队列
+        // 咏唱时间段外, 复唱时间内
         Pending = 582,
 
         // 自定义
         Delay = 0xffff0001,
         LocalDelay = 0xffff0002,
+        StateUpdate = 0xffff0003,
         Invalid = 0xffffffff,
     }
 
@@ -50,63 +55,122 @@ namespace GamepadTweaks
         public IntPtr a8 = IntPtr.Zero;
 
         public ActionStatus Status = ActionStatus.Ready;
-        public Dictionary<string, string> Names = new Dictionary<string, string>();
+        public DateTime LastTime = DateTime.Now;
+        public bool Finished = true;
 
         public string Name => Names.ContainsKey(Plugin.ClientLanguage) ? Names[Plugin.ClientLanguage] : String.Empty;
+        public Dictionary<string, string> Names = new Dictionary<string, string>();
+
         // public DateTime DelayTo = DateTime.Now;
+
         public bool Targeted => TargetID != Configuration.DefaultInvalidGameObjectID;
         public bool IsValid => this.ID > 0;
         public bool IsCasting => Plugin.Player is not null && Plugin.Player.IsCasting && Plugin.Actions.Equals(Plugin.Player.CastActionId, ID);
-        // public uint CastTimeTotalMilliseconds
-        // {
-        //     get {
-        //         var cast = Plugin.Actions.CastTime(ID);
-        //         if (cast <= 0.1) {
-        //             return 0;
-        //         }
-        //         return (uint)(cast * 1000);
-        //     }
-        // }
 
-        public async Task<bool> Succeed()
+        // 由于即刻咏唱的存在, CastTime必须动态获取
+        // TODO: Should get Action cast detail info even not in casting.
+        public uint CastTimeTotalMilliseconds
+        {
+            get {
+                var me = Plugin.Player;
+                if (me is not null && me.IsCasting && me.CastActionId == ID) {
+                    var cast = 0f;
+                    cast = me.TotalCastTime;
+                    if (cast <= 0.1) {
+                        return 0;
+                    }
+                    return (uint)(cast * 1000);
+                }
+                return 0;
+            }
+        }
+
+        public async Task<bool> Wait()
         {
             if (!Plugin.Ready || Plugin.Player is null) return false;
+            if (Finished || Status != ActionStatus.Ready) return true;
+
+            // 有些技能, 咏唱时间大于gcd(例如红宝石灾祸). 如果卡着咏唱结束时间连点的话,
+            // 游戏会连续释放2次UseAction[status==Ready] ???
+            // UseAction[a,Ready,UseType==0] : me.IsCasting == false -> UseAction[a,Ready,UseType==1] : me.IsCasting == true
+            // 由于第一次UseAction时, IsCasting == false. 因此Finished == true && status == Ready, 函数会立即返回true.
+            // TODO: GetAdjustedCastTime 有问题?
+            // if (CastTimeTotalMilliseconds == 0) return true;
 
             var me = Plugin.Player;
-            var before = DateTime.Now;
-            if (me.IsCasting && Plugin.Actions.Equals(me.CastActionId, ID)) {
-                var current = (int)(me.CurrentCastTime * 1000);
-                var total = (int)(me.TotalCastTime * 1000);
-                var delay = 50;
-                // 滑步!!!
-                while (current < total - Configuration.GlobalCoolingDown.SlidingWindow) {
-                    await Task.Delay(delay);
-                    if (!me.IsCasting) {
-                        return false;
-                    }
-                    current += delay;
-                }
-                var diff = DateTime.Now - before;
-            }
 
-            return true;
+            if (me.IsCasting) {
+                if (Plugin.Actions.Equals(me.CastActionId, ID)) {
+                    var current = (int)(me.CurrentCastTime * 1000);
+                    var total = (int)(me.TotalCastTime * 1000);
+                    var delay = 100;
+                    // 滑步!!!
+                    while (current < total - Configuration.GlobalCoolingDown.SlidingWindow) {
+                        await Task.Delay(delay);
+                        if (!me.IsCasting) {
+                            return false;
+                        }
+                        current += delay;
+                    }
+                    // PluginLog.Debug($"[Casting] action: {Plugin.Actions.Name(ID)}, wait: {total - Configuration.GlobalCoolingDown.SlidingWindow}, total: {total}");
+                    Finished = true;
+                    return true;
+                } else {
+                    // why reach here ???
+                    // abbbb[bc]. bc成功,且都需要咏唱.
+                    // UseAction[b], b is casting -> Put(b) -> UseAction[c], c is casting -> UpdateState(b) -> Put(c) -> UpdteState(c)
+                    return false;
+                }
+            } else {
+                // if (CastTimeTotalMilliseconds > 0) {
+                //     // 应该咏唱但是确没有, 被打断了?
+                //     // if ((DateTime.Now - LastTime).TotalMilliseconds < CastTimeTotalMilliseconds) return false;
+                //     // 应该咏唱但是超出了时间, 被阻塞太久了?
+                //     // if ((DateTime.Now - LastTime).TotalMilliseconds >= CastTimeTotalMilliseconds) return false;
+                //     return false;
+                // } else {
+                //     return true;
+                // }
+                return false;
+            }
         }
     }
+
+    // From: https://github.com/UnknownX7/NoClippy/Structures/ActionManager.cs
+    // [StructLayout(LayoutKind.Explicit)]
+    // public struct ActionManagerFields
+    // {
+    //     [FieldOffset(0x8)] public float AnimationLock;
+    //     [FieldOffset(0x28)] public bool IsCasting;
+    //     [FieldOffset(0x30)] public float ElapsedCastTime;
+    //     [FieldOffset(0x34)] public float CastTime;
+    //     [FieldOffset(0x60)] public float RemainingComboTime;
+    //     [FieldOffset(0x68)] public bool IsQueued;
+    //     [FieldOffset(0x110)] public ushort CurrentSequence;
+    //     [FieldOffset(0x112)] public ushort LastReceivedSequence;
+    //     [FieldOffset(0x610)] public bool IsGCDRecastActive;
+    //     [FieldOffset(0x614)] public uint CurrentGCDAction;
+    //     [FieldOffset(0x618)] public float ElapsedGCDRecastTime;
+    //     [FieldOffset(0x61C)] public float GCDRecastTime;
+    // }
 
     public class Actions
     {
         private Dictionary<uint, uint[]> AliasInfo = new Dictionary<uint, uint[]>() {
             // AST
-            {17055, new uint[] {4401, 4402, 4403, 4404, 4405, 4406} },   // 出卡
-            {25869, new uint[] {7444, 7445} }, // 出王冠卡
+            { 17055, new uint[] {4401, 4402, 4403, 4404, 4405, 4406} },   // 出卡
+            { 25869, new uint[] {7444, 7445} }, // 出王冠卡
 
-            // SNM
-            {25822, new uint[] {3582} },    // 星极超流
-            {3579,  new uint[] {25820} },   // 毁荡
-            {16511, new uint[] {25826} },   // 迸裂
-            {25883, new uint[] {25825, 25824, 25823, 25819, 25818, 25817, 25813, 25812, 25811, 25810, 25809, 25808} },    // 宝石耀
-            {25884, new uint[] {25829, 25828, 25827, 25816, 25815, 25814} },    // 宝石辉
-            {25800, new uint[] {3581, 7427} },    //以太蓄能
+            // SMN
+            { 25822, new uint[] {3582} },    // 星极超流
+            { 3579,  new uint[] {25820} },   // 毁荡
+            { 16511, new uint[] {25826} },   // 迸裂
+            { 25883, new uint[] {25825, 25824, 25823, 25819, 25818, 25817, 25813, 25812, 25811, 25810, 25809, 25808} },    // 宝石耀
+            { 25884, new uint[] {25829, 25828, 25827, 25816, 25815, 25814} },    // 宝石辉
+            { 25800, new uint[] {3581, 7427} },    //以太蓄能
+            { 25804, new uint[] {25807} },   // 绿
+            { 25803, new uint[] {25806} },   // 黄
+            { 25802, new uint[] {25805} },   // 红
         };
 
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
@@ -202,6 +266,9 @@ namespace GamepadTweaks
             {("zh", "风神召唤", 25807)},
             {("zh", "土神召唤", 25806)},
             {("zh", "火神召唤", 25805)},
+            {("zh", "绿宝石召唤", 25804)},
+            {("zh", "黄宝石召唤", 25803)},
+            {("zh", "红宝石召唤", 25802)},
             {("zh", "毁荡", 3579)},
             {("zh", "能量吸收", 16508)},
             {("zh", "能量抽取", 16510)},
@@ -290,17 +357,20 @@ namespace GamepadTweaks
             return (GamepadTweaks.ActionStatus)status;
         }
 
+        // // Broken
         // public float CastTime(uint actionID)
         // {
         //     float cast = 0f;
         //     unsafe {
-        //         var am = ActionManager.Instance();
+        //         var am = (ActionManagerFields*)ActionManager.Instance();
         //         if (am != null) {
-        //             cast = am->GetAdjustedCastTime(ActionType(actionID), actionID);
+        //             // cast = am->GetAdjustedCastTime(ActionType(actionID), actionID);
+        //             if (am->IsCasting && am->CurrentGCDAction == actionID) {
+        //                 cast = am->CastTime;
+        //             }
         //         }
         //     }
         //     return cast;
-
         // }
 
         public float RecastTimeRemain(uint actionID)
@@ -311,7 +381,8 @@ namespace GamepadTweaks
                 if (am != null) {
                     var elapsed = am->GetRecastTimeElapsed(ActionType(actionID), actionID);
                     var total = am->GetRecastTime(ActionType(actionID), actionID);
-                    // var total = am->GetAdjustedCastTime(ActionType(actionID), actionID);
+                    // var atotal = am->GetAdjustedRecastTime(ActionType(actionID), actionID);
+                    // var acast = am->GetAdjustedCastTime(ActionType(actionID), actionID,1,1);
                     recast = total - elapsed;
                 }
             }

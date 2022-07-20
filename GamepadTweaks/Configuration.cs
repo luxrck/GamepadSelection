@@ -17,6 +17,9 @@ namespace GamepadTweaks
             public static uint TotalMilliseconds = 2700;
             public static uint AnimationWindow = 700;
             public static uint SlidingWindow = 700;
+
+            //实际上也许是最后1/4个GCD时间段
+            public static uint RecastWindow = 500;
         }
 
         int IPluginConfiguration.Version { get; set; }
@@ -101,7 +104,7 @@ namespace GamepadTweaks
 
         public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.ComboManager.Current(groupID, lastComboAction, comboTimer);
         public void ResetComboState(uint groupID) => this.ComboManager.StateReset(groupID);
-        public async Task<bool> UpdateComboState(uint actionID = 0, ActionStatus status = ActionStatus.Ready, bool succeed = true, DateTime timestamp = default(DateTime)) => await this.ComboManager.StateUpdate(actionID, status, succeed, timestamp);
+        public async Task<bool> UpdateComboState(GameAction a, bool succeed = true, DateTime timestamp = default(DateTime)) => await this.ComboManager.StateUpdate(a, succeed, timestamp);
 
         public bool Update(string content = "")
         {
