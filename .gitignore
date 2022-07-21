@@ -345,3 +345,4 @@ healthchecksdb
 .editorconfig
 doc
 lib
+*.py

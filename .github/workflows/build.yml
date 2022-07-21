@@ -36,7 +36,7 @@ jobs:
       run: dotnet publish --configuration Release
     - uses: actions/upload-artifact@v2
       with:
-        name: build.api6.zip
+        name: build.api6
         path: ${{ env.ReleaseDir }}
         if-no-files-found: error
 
@@ -64,6 +64,6 @@ jobs:
       run: dotnet publish --configuration Release
     - uses: actions/upload-artifact@v2
       with:
-        name: build.api5.zip
+        name: build.api5
         path: ${{ env.ReleaseDir }}
         if-no-files-found: error

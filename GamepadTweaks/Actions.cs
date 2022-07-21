@@ -1,7 +1,9 @@
 using Dalamud;
 using Dalamud.Game.ClientState;
 using Dalamud.Logging;
+using Newtonsoft.Json;
 
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -56,10 +58,11 @@ namespace GamepadTweaks
 
         public ActionStatus Status = ActionStatus.Ready;
         public DateTime LastTime = DateTime.Now;
-        public bool Finished = true;
 
-        public string Name => Names.ContainsKey(Plugin.ClientLanguage) ? Names[Plugin.ClientLanguage] : String.Empty;
-        public Dictionary<string, string> Names = new Dictionary<string, string>();
+        public ActionInfo? Info => Plugin.Actions[ID];
+
+        public string Name => Info?.Name ?? String.Empty;
+        // public Dictionary<string, string> Names = new Dictionary<string, string>();
 
         // public DateTime DelayTo = DateTime.Now;
 
@@ -69,21 +72,11 @@ namespace GamepadTweaks
 
         // 由于即刻咏唱的存在, CastTime必须动态获取
         // TODO: Should get Action cast detail info even not in casting.
-        public uint CastTimeTotalMilliseconds
-        {
-            get {
-                var me = Plugin.Player;
-                if (me is not null && me.IsCasting && me.CastActionId == ID) {
-                    var cast = 0f;
-                    cast = me.TotalCastTime;
-                    if (cast <= 0.1) {
-                        return 0;
-                    }
-                    return (uint)(cast * 1000);
-                }
-                return 0;
-            }
-        }
+        public uint CastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: false);
+        public uint AdjustedCastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: true);
+
+        public bool CanCastImmediatly => AdjustedCastTimeTotalMilliseconds == 0;
+        public bool Finished = false;
 
         public async Task<bool> Wait()
         {
@@ -95,7 +88,6 @@ namespace GamepadTweaks
             // UseAction[a,Ready,UseType==0] : me.IsCasting == false -> UseAction[a,Ready,UseType==1] : me.IsCasting == true
             // 由于第一次UseAction时, IsCasting == false. 因此Finished == true && status == Ready, 函数会立即返回true.
             // TODO: GetAdjustedCastTime 有问题?
-            // if (CastTimeTotalMilliseconds == 0) return true;
 
             var me = Plugin.Player;
 
@@ -154,6 +146,46 @@ namespace GamepadTweaks
     //     [FieldOffset(0x61C)] public float GCDRecastTime;
     // }
 
+    public class ActionInfo
+    {
+        public uint ID;
+        public string Name => Names.ContainsKey(Plugin.ClientLanguage) ? Names[Plugin.ClientLanguage] : String.Empty;
+        public Dictionary<string, string> Names = new Dictionary<string, string>();
+        public int Icon;
+        public int ActionCategory;
+        public int ClassJob;
+        public int BehaviourType;
+        public int ClassJobLevel;
+        public bool IsRoleAction;
+        public int Range;
+        public bool CanTargetSelf;
+        public bool CanTargetParty;
+        public bool CanTargetFriendly;
+        public bool CanTargetHostil;
+        public bool TargetArea;
+        public bool CanTargetDea;
+        public int CastType;
+        public int EffectRange;
+        public int XAxisModifier;
+        // public Action{Combo}
+        public bool PreservesCombo;
+        public int CastTime;
+        public int RecastTime;
+        public int CooldownGroup;
+        public int AdditionalCooldownGroup;
+        public int MaxCharges;
+        public int AttackType;
+        public int Aspect;
+        public int ActionProcStatus;
+        // public Status{GainSelf}
+        public int UnlockLink;
+        public int ClassJobCategory;
+        public bool AffectsPosition;
+        public int Omen;
+        public bool IsPvP;
+        public bool IsPlayerAction;
+    }
+
     public class Actions
     {
         private Dictionary<uint, uint[]> AliasInfo = new Dictionary<uint, uint[]>() {
@@ -175,129 +207,9 @@ namespace GamepadTweaks
 
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
 
-        private List<(string Lang, string Name, uint ID)> ActionsInfo = new List<(string, string, uint)> {
-            // SGE
-            {("zh", "均衡诊断", 24291)},
-            {("zh", "白牛清汁", 24303)},
-            {("zh", "灵橡清汁", 24296)},
-            {("zh", "混合", 24317)},
-            {("zh", "输血", 24305)},
-            {("en", "Diagnosis", 24284)},
-            {("en", "Eukrasian Diagnosis", 24291)},
-            {("en", "Taurochole", 24303)},
-            {("en", "Druochole", 24296)},
-            {("en", "Krasis", 24317)},
-            {("en", "Haima", 24305)},
-
-            // WHM
-            {("zh", "再生", 137)},
-            {("zh", "天赐祝福", 140)},
-            {("zh", "神祝祷", 7432)},
-            {("zh", "神名", 3570)},
-            {("zh", "水流幕", 25861)},
-            {("zh", "安慰之心", 16531)},
-            {("zh", "庇护所", 3569)},
-            {("zh", "礼仪之铃", 25862)},
-            {("en", "Regen", 137)},
-            {("en", "Benediction", 140)},
-            {("en", "Divine Benison", 7432)},
-            {("en", "Tetragrammaton", 3570)},
-            {("en", "Aquaveil", 25861)},
-            {("en", "Afflatus Solace", 16531)},
-            {("en", "Asylum", 3569)},
-            {("en", "Liturgy of the Bell", 25862)},
-
-            // AST
-            {("zh", "先天禀赋", 3614)},
-            {("zh", "出卡", 17055)},
-            {("zh", "吉星相位", 3595)},
-            {("zh", "星位合图", 3612)},
-            {("zh", "出王冠卡", 25869)},
-            {("zh", "天星交错", 16556)},
-            {("zh", "擢升", 25873)},
-            {("zh", "地星", 7439)},
-            {("zh", "小奥秘卡", 7443)},
-            {("zh", "抽卡", 3590)},
-            {("en", "Essential Dignity", 3614)},
-            {("en", "Play", 17055)},
-            {("en", "Aspected Benefic", 3595)},
-            {("en", "Synastry", 3612)},
-            {("en", "Crown Play", 25869)},
-            {("en", "Celestial Intersection", 16556)},
-            {("en", "Exaltation", 25873)},
-
-            // SCH
-            {("zh", "鼓舞激励之策", 185)},
-            {("zh", "野战治疗阵", 188)},
-            {("zh", "生命活性法", 189)},
-            {("zh", "深谋远虑之策", 7434)},
-            {("zh", "以太契约", 7437)},
-            {("zh", "生命回生法", 25867)},
-            {("en", "Adloquium", 185)},
-            {("en", "Lustrate", 189)},
-            {("en", "Excogitation", 7434)},
-            {("en", "Aetherpact", 7423)},
-            {("en", "Protraction", 25867)},
-
-            // WAR
-            {("zh", "重劈", 31)},
-            {("zh", "凶残裂", 37)},
-            {("zh", "超压斧", 41)},
-            {("zh", "秘银暴风", 16462)},
-            {("zh", "暴风斩", 42)},
-            {("zh", "暴风碎", 45)},
-            {("zh", "飞斧", 46)},
-            {("zh", "守护", 48)},
-            {("zh", "铁壁", 7531)},
-            {("zh", "雪仇", 7535)},
-            {("zh", "下踢", 7540)},
-            {("zh", "蛮荒崩裂", 25753)},
-            {("zh", "原初的解放", 7389)},
-
-            // SMN
-            {("zh", "龙神附体", 3581)},
-            {("zh", "龙神召唤", 7427)},
-            {("zh", "以太蓄能", 25800)},
-            {("zh", "死星核爆", 3582)},
-            {("zh", "星极脉冲", 25820)},
-            {("zh", "星极超流", 25822)},
-            {("zh", "宝石耀", 25883)},
-            {("zh", "宝石辉", 25884)},
-            {("zh", "风神召唤", 25807)},
-            {("zh", "土神召唤", 25806)},
-            {("zh", "火神召唤", 25805)},
-            {("zh", "绿宝石召唤", 25804)},
-            {("zh", "黄宝石召唤", 25803)},
-            {("zh", "红宝石召唤", 25802)},
-            {("zh", "毁荡", 3579)},
-            {("zh", "能量吸收", 16508)},
-            {("zh", "能量抽取", 16510)},
-            {("zh", "迸裂", 16511)},
-            {("zh", "三重灾祸", 25826)},
-            {("zh", "龙神迸发", 7429)},
-            {("zh", "溃烂爆发", 181)},
-            {("zh", "痛苦核爆", 3578)},
-            {("zh", "绿宝石灾祸", 25829)},
-            {("zh", "黄宝石灾祸", 25828)},
-            {("zh", "红宝石灾祸", 25827)},
-            {("zh", "绿宝石迸裂", 25816)},
-            {("zh", "黄宝石迸裂", 25815)},
-            {("zh", "红宝石迸裂", 25814)},
-            {("zh", "绿宝石之仪", 25825)},
-            {("zh", "黄宝石之仪", 25824)},
-            {("zh", "红宝石之仪", 25823)},
-            {("zh", "绿宝石毁荡", 25819)},
-            {("zh", "黄宝石毁荡", 25818)},
-            {("zh", "红宝石毁荡", 25817)},
-            {("zh", "绿宝石毁坏", 25813)},
-            {("zh", "黄宝石毁坏", 25812)},
-            {("zh", "红宝石毁坏", 25811)},
-            {("zh", "绿宝石毁灭", 25810)},
-            {("zh", "黄宝石毁灭", 25809)},
-            {("zh", "红宝石毁灭", 25808)},
-        };
-
-        private Dictionary<uint, GameAction> ActionsMap = new Dictionary<uint, GameAction>();
+        // private Dictionary<uint, GameAction> ActionsMap = new Dictionary<uint, GameAction>();
+        private Dictionary<uint, ActionInfo> ActionsInfoMap = new Dictionary<uint, ActionInfo>();
+        private Dictionary<string, uint> ActionsNameMap = new Dictionary<string, uint>();
 
         public Actions()
         {
@@ -308,22 +220,51 @@ namespace GamepadTweaks
                 AliasMap[a.Key] = a.Key;
             }
 
-            foreach (var (lang, name, id) in ActionsInfo) {
-                if (!ActionsMap.ContainsKey(id))
-                    ActionsMap[id] = new GameAction() {
-                        ID = id,
-                    };
-                ActionsMap[id].Names[lang] = name;
+            // foreach (var (lang, name, id) in ActionsInfo) {
+            //     if (!ActionsMap.ContainsKey(id))
+            //         ActionsMap[id] = new GameAction() {
+            //             ID = id,
+            //         };
+            //     ActionsMap[id].Names[lang] = name;
+            // }
+
+            try {
+                var content = File.ReadAllText(Configuration.ActionFile.ToString());
+                var infos = JsonConvert.DeserializeObject<List<ActionInfo>>(content) ?? new List<ActionInfo>();
+                foreach (var info in infos) {
+                    if (!ActionsInfoMap.ContainsKey(info.ID)) {
+                        ActionsInfoMap[info.ID] = info;
+                    }
+                    if (ActionsNameMap.ContainsKey(info.Name)) {
+                        PluginLog.Warning($"Duplicate actions: {info.Name}. {ActionsNameMap[info.Name]} already exists while incoming {info.ID}");
+                    } else {
+                        ActionsNameMap[info.Name] = info.ID;
+                    }
+                }
+            } catch(Exception e) {
+                PluginLog.Error($"Exception: {e}");
             }
         }
 
-        public bool Contains(string action) => ActionsInfo.Any(x => x.Name == action);
+        private static Actions instance = null!;
+        private static readonly object instanceLock = new object();
+        public static Actions Instance()
+        {
+            lock(instanceLock) {
+                if (instance == null) {
+                    instance = new Actions();
+                }
+                return instance;
+            }
+        }
+
+        public bool Contains(string action) => ActionsNameMap.ContainsKey(action);
         public bool Equals(uint a1, uint a2) => BaseActionID(a1) == BaseActionID(a2);
 
-        public uint this[string a] => Contains(a) ? ActionsInfo.First(x => x.Name == a).ID : 0;
-        public string this[uint i] => ActionsMap.ContainsKey(i) ? ActionsMap[i].Name : String.Empty;
+        public uint this[string a] => Contains(a) ? ActionsNameMap[a] : 0;
+        public ActionInfo? this[uint i] => ActionsInfoMap.ContainsKey(i) ? ActionsInfoMap[i] : null;
         public uint ID(string a) => this[a];
-        public string Name(uint i) => this[i];
+        public string Name(uint i) => this[i]?.Name ?? String.Empty;
 
         public uint BaseActionID(uint actionID) => AliasMap.ContainsKey(actionID) ? AliasMap[actionID] : actionID;
         public FFXIVClientStructs.FFXIV.Client.Game.ActionType ActionType(uint actionID) => FFXIVClientStructs.FFXIV.Client.Game.ActionType.Spell;
@@ -372,6 +313,89 @@ namespace GamepadTweaks
         //     }
         //     return cast;
         // }
+
+        // Auto Attack, DoT and HoT Strength:
+        //      f(SPD) = ( 1000 + ⌊ 130 × ( SS - Level Lv, SUB ) / Level Lv, DIV ⌋ ) / 1000
+        // Weaponskill and Spell Cast and Global Cooldown Reduction (No Haste Buffs):
+        //      f(GCD) = ⌊ ((GCD * (1000 + ⌈ 130 × ( Level Lv, SUB - Speed)/ Level Lv, DIV)⌉ ) / 10000) / 100 ⌋
+
+        // GCD Calculation (5.x)
+        // GCD1 = ⌊ ( 2000 - f(SPD) ) × Action Delay / 1000 ⌋
+        // GCD2 = ⌊ ( 100 - ∑ Speed Buffs ) × ( 100 - Haste ) / 100 ⌋
+        // GCD3 = ⌊ GCD2 × GCD1 / 1000 ⌋ × Astral_Umbral / 100 ⌋
+        // Final GCD = GCD3 / 100
+        //
+        // Speed Buffs
+        // Name    Value
+        // Ley Lines   15
+        // Presence of Mind    20
+        // Shifu   13
+        // Blood Weapon    10
+        // Huton   15
+        // *Greased Lightning 1/2/3/4   5, 10, 15, 20
+        // *Repertoire 1/2/3/4  4, 8, 12, 16
+        public uint Cooldown(uint actionID, bool adjusted = true)
+        {
+            var SUB = new uint[] {55, 56, 57, 60, 62, 65, 68, 70, 73, 76, 78, 82, 85, 89, 93, 96, 100, 104, 109, 113, 116, 122, 127, 133, 138, 144, 150, 155, 162, 168, 173, 181, 188, 194, 202, 209, 215, 223, 229, 236, 244, 253, 263, 272, 283, 292, 302, 311, 322, 331, 341, 342, 344, 345, 346, 347, 349, 350, 351, 352, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 370, 372, 374, 376, 378, 380, 382, 384, 386, 388, 390, 392, 394, 396, 398, 400};
+            var DIV = new uint[] {55, 56, 57, 60, 62, 65, 68, 70, 73, 76, 78, 82, 85, 89, 93, 96, 100, 104, 109, 113, 116, 122, 127, 133, 138, 144, 150, 155, 162, 168, 173, 181, 188, 194, 202, 209, 215, 223, 229, 236, 244, 253, 263, 272, 283, 292, 302, 311, 322, 331, 341, 366, 392, 418, 444, 470, 496, 522, 548, 574, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 940, 980, 1020, 1060, 1100, 1140, 1180, 1220, 1260, 1300, 1360, 1420, 1480, 1540, 1600, 1660, 1720, 1780, 1840, 1900};
+
+            const uint Swiftcast = 167;         // 即刻咏唱
+            const uint Lightspeed = 841;        // 光速
+
+            const uint LeyLines = 737;          // 黑魔纹
+            const uint PresenceOfMind = 157;    // 神速咏唱
+            // const uint Shifu = 7479;           // 士风
+            // const uint BloodWeapon = 3625;     // 嗜血
+            const uint Huton = 500;             // 风遁之术
+
+            var me = Plugin.Player;
+
+            var info = this[actionID];
+
+            if (me is null || info is null) return (uint)(info?.CastTime ?? 0);
+            if (me.IsCasting && me.CastActionId == info.ID) return (uint)(me.TotalCastTime * 1000);
+
+            var cast = info.CastTime;
+
+            if (!adjusted) return (uint)cast;
+
+            // Spellspeed or Skillspeed
+            var ss = cast > 0 ? Plugin.PlayerSpellSpeed : Plugin.PlayerSkillSpeed;
+
+            var lv = me.Level;
+            var speedBuff = 0;
+            var haste = 0;
+            var astral_umbral = 100;
+
+            Func<double> f = () => (1000 + 130 * (ss - SUB[lv]) / DIV[lv]);
+            Func<double> gcd1 = () => (2000 - f()) * cast / 1000;
+            Func<double> gcd2 = () => (100 - speedBuff) * (100 - haste) / 100;
+            Func<double> gcd3 = () => gcd2() * gcd1() * astral_umbral / 100;
+
+            // PluginLog.Debug($"SS: {ss}, sub: {SUB[lv]}, div: {DIV[lv]}, lv: {lv}, f: {f()}, gcd1: {gcd1()}, gcd2: {gcd2()}, gcd3: {gcd3()}, cast: {cast}");
+
+            foreach (var status in me.StatusList) {
+                // PluginLog.Debug($"statusID: {status.StatusId}");
+                switch (status.StatusId)
+                {
+                    case Swiftcast:
+                    case Lightspeed:
+                        return 0;
+                    case LeyLines:
+                        speedBuff += 15; break;
+                    case PresenceOfMind:
+                        speedBuff += 20; break;
+                    // case Shifu:
+                    //     speedBuff += 13; break;
+                    // case BloodWeapon:
+                    //     speedBuff += 10; break;
+                    case Huton:
+                        speedBuff += 15; break;
+                }
+            }
+
+            return (uint)(gcd3() / 100);
+        }
 
         public float RecastTimeRemain(uint actionID)
         {

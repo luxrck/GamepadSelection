@@ -61,6 +61,7 @@ namespace GamepadTweaks
 
         public GameAction Action = null!;
         public uint ID => Action.ID;
+        public string Name => Action.Name;
         public bool IsCasting => Action.IsCasting;
         public bool IsValid => Action.IsValid;
         // public bool ExecuteFinished => Action.Finished;
@@ -119,7 +120,7 @@ namespace GamepadTweaks
 
         public uint Current(uint lastComboAction = 0, float comboTimer = 0f)
         {
-            return ComboActions[CurrentIndex].ID;
+            return ComboActions.Count > 0 ? ComboActions[CurrentIndex%ComboActions.Count].ID : GroupID;
         }
 
         public bool Contains(uint actionID) => ComboActions.Any(x => Actions.Equals(x.ID, actionID));
@@ -128,6 +129,8 @@ namespace GamepadTweaks
 
         public async Task<bool> StateUpdate(GameAction a, bool succeed = true, DateTime now = default(DateTime))
         {
+            if (ComboActions.Count == 0) return false;
+
             // if (!succeed) return false;
             var actionID = a.ID;
             var cstatus = a.Status;
@@ -196,7 +199,7 @@ namespace GamepadTweaks
             // a1 a2[notlearned] a3
             // 如果a1 a2是同一group, a1执行完之后, 查询a2的status将会是pending或locking
             // 等到a2真正可以被执行的时候(比如下一个gcd开始), 它的status才会变成ready(或notlearned等)
-            if (cstatus == ActionStatus.NotLearned) {
+            if (cstatus == ActionStatus.NotLearned && caction.Type != ComboActionType.Blocking) {
                 // PluginLog.Debug($"[ComboStateUpdate] action not learned. {Actions.Name(caction.ID)} at {CurrentIndex} of Group: {GroupID}. Triggerd by {actionID}");
                 CurrentIndex = (index + 1) % ComboActions.Count;
                 this.actionLockHighPriority.Release();
@@ -212,7 +215,8 @@ namespace GamepadTweaks
                 // 例如: 抽卡 -> 出卡
                 // 抽卡结束, 出卡技能不一定可以立刻可用, 所以等一等.
                 // 目前需要咏唱的技能不可以立即Finished.
-                // animationDelay = a.Finished ? 100 : 0;
+                // PluginLog.Debug($"starting wait for action: {caction.Name} done.");
+                animationDelay = a.Finished ? 150 : 50;
                 var aa = DateTime.Now;
                 // PluginLog.Debug($"Try wait. {caction.ID}, finished: {a.Finished}");
                 if (!await a.Wait()) {
@@ -272,6 +276,8 @@ namespace GamepadTweaks
                         switch (caction.Type)
                         {
                             // 跳NotSatisfied需要确保action已经执行
+                            case ComboActionType.Single:
+                            case ComboActionType.Multi:
                             case ComboActionType.SingleSkipable:
                             case ComboActionType.MultiSkipable:
                                 if (cstatus == ActionStatus.NotSatisfied && caction.Executed || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
@@ -312,7 +318,6 @@ namespace GamepadTweaks
                                 } else if (cstatus == ActionStatus.Ready) {
                                     if (succeed) {
                                         // caction.Count += 1;
-                                        PluginLog.Debug($"{DateTime.Now} {caction.ID} {caction.Count}");
                                         caction.Update();
                                     }
                                     if (caction.Finished) { // Count >= MaximumCount
@@ -329,14 +334,18 @@ namespace GamepadTweaks
                                     }
                                 } else if (cstatus == ActionStatus.NotSatisfied) {
                                     if (caction.Type == ComboActionType.Single || caction.Type == ComboActionType.Multi) {
+                                        // 未执行时, 必须等待.
+                                        // 直到执行过之后再次出现NotSatisfied时才可被自动跳过
                                         if (caction.Executed) { // Count > 0
                                             index += 1; animationDelay = 0; // caction.Restore();
-                                        } else {
-                                            // caction.Executed = true;
-                                            caction.Update(); // <---- 防止卡住. 点两次
                                         }
+                                        // else {
+                                        //     // caction.Executed = true;
+                                        //     caction.Update(); // <---- 防止卡住. 点两次
+                                        // }
                                     } else if (caction.Type == ComboActionType.SingleSkipable || caction.Type == ComboActionType.MultiSkipable || caction.Type == ComboActionType.Skipable) {
-                                        index += 1; animationDelay = 0; // caction.Restore();  // 点一次
+                                        // index += 1; animationDelay = 0; // caction.Restore();  // 点一次
+                                        caction.Update();   // 不满足点一次跳过
                                     }
                                 }
                                 break;
@@ -347,7 +356,7 @@ namespace GamepadTweaks
                                 } else {
                                     // caction.Count += 1;
                                     caction.Update();
-                                    if (caction.Count >= 16) {   // <--- 点十次
+                                    if (caction.Count >= 16) {   // <--- 点16次
                                         index += 1; // caction.Restore();
                                     }
                                 }
@@ -390,7 +399,7 @@ namespace GamepadTweaks
 
                 // CurrentIndex更新之后不代表就立刻转移到了下一个技能, 到GetIcon更新技能图标还有一段时间.
                 // 继续sleep, 留给GetIcon一点时间, 到图标更新完成.
-                await Task.Delay(100);
+                await Task.Delay(50);
 
                 // 应该做出假设: 此时已经成功转移到下一个技能, 并且技能图标已经更新.
                 // 那么需要把这之前等待的其它Task全部清除. 只处理在这之后发出的Task.
@@ -408,8 +417,9 @@ namespace GamepadTweaks
     public class ComboManager
     {
         public Dictionary<uint, ComboGroup> ComboGroups = new Dictionary<uint, ComboGroup>();
-        public Actions Actions = new Actions();
+        public Actions Actions = Plugin.Actions;
 
+        public ComboManager() {}
         public ComboManager(List<(uint, List<ComboAction>, string)> actions)
         {
             foreach (var (groupID, comboActions, comboType) in actions) {

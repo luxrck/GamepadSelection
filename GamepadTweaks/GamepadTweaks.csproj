@@ -19,11 +19,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="..\assets\sarasa-fixed-sc-regular.subset.ttf">
+    <Content Include="..\assets\Actions.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>
     <Content Include="..\assets\chars.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="..\assets\sarasa-fixed-sc-regular.subset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
     </Content>

@@ -111,31 +111,13 @@ namespace GamepadTweaks
             Enable();
         }
 
-        public async Task<bool> WaitCasting()
-        {
-            if (!Plugin.Ready || Plugin.Player is null) return false;
-
-            var me = Plugin.Player;
-
-            if (me.IsCasting) {
-                var current = (int)(me.CurrentCastTime * 1000);
-                var total = (int)(me.TotalCastTime * 1000);
-                var delay = 100;
-                // 滑步!!!
-                while (current < total - Configuration.GlobalCoolingDown.SlidingWindow) {
-                    await Task.Delay(delay);
-                    if (!me.IsCasting) {
-                        return false;
-                    }
-                    current += delay;
-                }
-            }
-
-            return true;
-        }
-
         public void UpdateFramework(Framework framework) {
-            if (!Plugin.Ready) return;
+            if (!Plugin.Ready || Plugin.Player is null) return;
+
+            // reset combo state if out of combat.
+            if (Plugin.Player.StatusFlags != StatusFlags.InCombat) {
+                Plugin.Config.ResetComboState(0);
+            }
 
             // macro
             Task.Run(async () => {
@@ -199,7 +181,7 @@ namespace GamepadTweaks
                     if (this.executedActions.Reader.TryRead(out (GameAction Action, bool Result) a)) {
 
                         if (Config.IsComboAction(a.Action.ID)) {
-                            // PluginLog.Debug($"[UpdateComboStateAsync] update combo action: {a.ID}");
+                            // PluginLog.Debug($"[UpdateComboStateAsync] update combo action: {a.Action.ID}");
                             await Config.UpdateComboState(a.Action, a.Result, DateTime.Now);
                         }
                     } else {
@@ -249,7 +231,7 @@ namespace GamepadTweaks
             var softTarget = TargetManager.SoftTarget;
             bool inParty = pmap.Count > 1 || Config.alwaysInParty;  // <---
 
-            string actionName = Actions[adjustedID];
+            string actionName = Actions.Name(adjustedID);
 
             // PluginLog.Debug($"[UseAction]: {actionID} {adjustedID} {actionName} {targetedActorID} {softTarget ?? target} status: {status}, state: {this.state} {Actions.RecastTimeRemain(adjustedID)}");
             // PluginLog.Debug($"[UseAction][Args] am: {actionManager}, type: {actionType}, id: {actionID}, target: {targetedActorID}, param: {param}, useType: {useType}, pvp: {pvp}, a8: {a8}");
@@ -453,7 +435,6 @@ namespace GamepadTweaks
             }
 
         MainRet:
-            a.LastTime = DateTime.Now;
             // PluginLog.Debug($"[cast] id: {a.ID}, casttime: {a.CastTimeTotalMilliseconds}, iscasting?:{me.IsCasting}, me.casttime: {me.CurrentCastTime}, {me.TotalCastTime}");
 
             // ActionExecuted -> Start
@@ -468,15 +449,12 @@ namespace GamepadTweaks
 
             // status == NotSatisfied -> return false;
             if (a.Type == ActionType.Spell) {
-                Task.Run(async() => {
-                    // oh no...
-                    await Task.Delay(100);
-                    if (me.IsCasting) a.Finished = false;
-                    bool suc = this.executedActions.Writer.TryWrite((a, ret));
-                    if (!suc) {
-                        PluginLog.Debug($"[UseAction] executedActions write failed.");
-                    }
-                });
+                a.LastTime = DateTime.Now;
+                if (a.CanCastImmediatly) a.Finished = true;
+                bool suc = this.executedActions.Writer.TryWrite((a, ret));
+                if (!suc) {
+                    PluginLog.Debug($"[UseAction] executedActions write failed.");
+                }
             }
 
             return ret;

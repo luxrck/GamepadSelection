@@ -16,7 +16,7 @@ namespace GamepadTweaks
             public static float TotalSeconds = 2.7f;
             public static uint TotalMilliseconds = 2700;
             public static uint AnimationWindow = 700;
-            public static uint SlidingWindow = 700;
+            public static uint SlidingWindow = 500;
 
             //实际上也许是最后1/4个GCD时间段
             public static uint RecastWindow = 500;
@@ -51,14 +51,14 @@ namespace GamepadTweaks
         #endregion
 
         // public Dictionary<string, uint> actions;
-        public Actions Actions = new Actions();
-        public ComboManager ComboManager = null!;
+        public Actions Actions = Plugin.Actions;
+        public ComboManager ComboManager = new GamepadTweaks.ComboManager();
 
-        public static string Root => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? String.Empty;
-        public static string FontFile => Path.Combine(Root, "sarasa-fixed-sc-regular.subset.ttf");
-        public static string GlyphRangesFile => Path.Combine(Root, "chars.txt");
-        public static string ActionFile => Path.Combine(Root, "Actions.json");
-        public static string ConfigFile => Plugin.PluginInterface.ConfigFile.ToString();
+        public static string Root = Plugin.PluginInterface.AssemblyLocation.DirectoryName ?? String.Empty;
+        public static string FontFile = Path.Combine(Root, "sarasa-fixed-sc-regular.subset.ttf");
+        public static string GlyphRangesFile = Path.Combine(Root, "chars.txt");
+        public static string ActionFile = Path.Combine(Root, "Actions.json");
+        public static string ConfigFile = Plugin.PluginInterface.ConfigFile.ToString();
 
         internal string content = String.Empty;
 

@@ -46,9 +46,28 @@ namespace GamepadTweaks
 
         public string Name => "Gamepad Tweaks (for Healers)";
 
+        // aaah
+        public static uint PlayerSpellSpeed {
+            get {
+                if (!Plugin.Ready) return 0;
+                unsafe {
+                    return *(uint*)(SigScanner.Module.BaseAddress + 0x1e9fe4c);
+                }
+            }
+        }
+
+        public static uint PlayerSkillSpeed {
+            get {
+                if (!Plugin.Ready) return 0;
+                unsafe {
+                    return *(uint*)(SigScanner.Module.BaseAddress + 0x1e9fe48);
+                }
+            }
+        }
+
         public static GamepadActionManager GamepadActionManager{ get; private set; } = null!;
         public static Configuration Config { get; private set; } = null!;
-        public static Actions Actions = new Actions();
+        public static Actions Actions { get; private set; } = null!;
 
         public PluginWindow Window { get; set; }
         public WindowSystem WindowSystem { get; set; }
@@ -58,11 +77,14 @@ namespace GamepadTweaks
             DalamudPluginInterface pi,
             CommandManager commands)
         {
+            Actions = GamepadTweaks.Actions.Instance();
             Config = Configuration.Load();
+
+            GamepadActionManager = new GamepadActionManager();
+
             // Load all of our commands
             Commands = new PluginCommandManager<Plugin>(this, commands);
 
-            GamepadActionManager = new GamepadActionManager();
 
             // Initialize the UI
             Window = new PluginWindow();
