@@ -114,8 +114,10 @@ namespace GamepadTweaks
         public void UpdateFramework(Framework framework) {
             if (!Plugin.Ready || Plugin.Player is null) return;
 
+            var me = Plugin.Player;
+
             // reset combo state if out of combat.
-            if (Plugin.Player.StatusFlags != StatusFlags.InCombat) {
+            if (!me.StatusFlags.HasFlag(StatusFlags.InCombat) && !me.StatusFlags.HasFlag(StatusFlags.WeaponOut)) {
                 Plugin.Config.ResetComboState(0);
             }
 
@@ -182,10 +184,10 @@ namespace GamepadTweaks
 
                         if (Config.IsComboAction(a.Action.ID)) {
                             // PluginLog.Debug($"[UpdateComboStateAsync] update combo action: {a.Action.ID}");
-                            await Config.UpdateComboState(a.Action, a.Result, DateTime.Now);
+                            await Config.UpdateComboState(a.Action, a.Result);
                         }
                     } else {
-                        await Config.UpdateComboState(new GameAction() {ID = 0}, timestamp: DateTime.Now);
+                        await Config.UpdateComboState(new GameAction() {ID = 0});
                     }
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");
@@ -427,7 +429,7 @@ namespace GamepadTweaks
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                         this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        // PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, action: {Plugin.Actions.Name(adjustedID)}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}, iscasting: {me.IsCasting}");
+                        // PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, {status}, iscasting: {me.IsCasting}, casttime: {a.AdjustedCastTimeTotalMilliseconds}, action: {Plugin.Actions.Name(adjustedID)}, ID: {adjustedID}, UseType: {a.UseType}");
                     }
 
                     this.state = GamepadActionManagerState.Start;
@@ -456,7 +458,7 @@ namespace GamepadTweaks
                     PluginLog.Debug($"[UseAction] executedActions write failed.");
                 }
             }
-
+PluginLog.Debug($"{me.StatusFlags}");
             return ret;
         }
 

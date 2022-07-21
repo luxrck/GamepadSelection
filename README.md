@@ -1,6 +1,6 @@
 ## GamepadTweaks
 
-[![Build](https://img.shields.io/github/workflow/status/luxrck/GamepadTweaks/Build?style=for-the-badge)](https://github.com/luxrck/GamepadTweaks/.github/workflows/build.yml)
+[![Build](https://img.shields.io/github/workflow/status/luxrck/GamepadTweaks/Build?style=for-the-badge)](https://github.com/luxrck/GamepadTweaks/blob/master/.github/workflows/build.yml)
 
 ❗: This plugin is under heavy development now and may contains many potential bugs, so use at your own risk.
 

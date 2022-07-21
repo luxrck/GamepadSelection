@@ -57,23 +57,14 @@ namespace GamepadTweaks
         public int Count = 0;
         public DateTime LastTime = DateTime.Now;
 
-        public Actions Actions = Plugin.Actions;
-
-        public GameAction Action = null!;
-        public uint ID => Action.ID;
-        public string Name => Action.Name;
-        public bool IsCasting => Action.IsCasting;
-        public bool IsValid => Action.IsValid;
-        // public bool ExecuteFinished => Action.Finished;
+        public uint ID = 0;
+        public bool IsValid => ID > 0;
 
         public bool Finished => Count >= MaximumCount;
         public bool Executed => Count > 0;
-        public uint CastTimeTotalMilliseconds => Action.CastTimeTotalMilliseconds;
 
         public void Restore() => Count = 0;
         public void Update() => Count += 1;
-
-        public async Task<bool> Wait() => await Action.Wait();
     }
 
     public class ComboGroup
@@ -83,10 +74,11 @@ namespace GamepadTweaks
         public List<ComboAction> ComboActions;
         public ComboType Type;
 
-        public Actions Actions = Plugin.Actions;
         public DateTime LastTime = DateTime.Now;
+        public uint LastActionID = 0;
+        public int LastIndex = 0;
 
-        private TargetManager TargetManager = Plugin.TargetManager;
+        public Actions Actions = Plugin.Actions;
 
         private SemaphoreSlim actionLock = new SemaphoreSlim(1, 1);
         private SemaphoreSlim actionLockHighPriority = new SemaphoreSlim(1, 1);
@@ -127,7 +119,7 @@ namespace GamepadTweaks
 
         public void StateReset() => CurrentIndex = 0;
 
-        public async Task<bool> StateUpdate(GameAction a, bool succeed = true, DateTime now = default(DateTime))
+        public async Task<bool> StateUpdate(GameAction a, bool succeed = true)
         {
             if (ComboActions.Count == 0) return false;
 
@@ -147,7 +139,7 @@ namespace GamepadTweaks
             if (index == -1) index = CurrentIndex;
 
             var caction = ComboActions[index % ComboActions.Count];
-            var cadjust = Actions.AdjustedActionID(caction.ID);
+            var cadjust = Actions.AdjustedActionID(a.ID);
             var crgroup = Actions.RecastGroup(cadjust);
 
             cstatus = originalIndex == -1 ? Actions.ActionStatus(cadjust) : cstatus;
@@ -178,20 +170,44 @@ namespace GamepadTweaks
             } else {
                 await this.actionLock.WaitAsync();
                 // if ((now - this.LastTime).TotalMilliseconds < animationTotal) {
-                if (now < this.LastTime) {
+                // PluginLog.Debug($"id: {a.ID}, {a.LastTime.Second}:{a.LastTime.Millisecond} {this.LastTime.Second}:{this.LastTime.Millisecond}");
+                if (a.LastTime < this.LastTime) {
                     // 这可以确保在小于animationDelay的时间段内发出的pending actions可以被忽略
-                    if (cstatus == ActionStatus.Pending) {
+                    // if (cstatus == ActionStatus.Pending) {
+                    //     this.actionLock.Release();
+                    //     return false;
+                    // } else if (cstatus != ActionStatus.Ready) {
+                    //     if (!(await this.actionLockHighPriority.WaitAsync(0))) {
+                    //         this.actionLock.Release();
+                    //         return false;
+                    //     }
+                    // } else {
+                    //     await this.actionLockHighPriority.WaitAsync();
+                    // }
+                    if (cstatus == ActionStatus.Ready && a.ID != LastActionID) {
+                        await this.actionLockHighPriority.WaitAsync();
+                    } else {
                         this.actionLock.Release();
                         return false;
-                    } else if (cstatus != ActionStatus.Ready) {
-                        if (!(await this.actionLockHighPriority.WaitAsync(0))) {
+                    }
+                } else {
+                    // 由于系统的技能插入特性, 如果处于连击状态.
+                    // 在下一个gcd开始的时候, 系统会帮我们自动插入该技能.
+                    // 但是: 如果技能的咏唱时间大于gcd. 那么当咏唱结束的那个gcd开始的时候,
+                    // 我们出了自己手动触发了一次UseAction[UseType==0]之外,
+                    // 系统还是会帮我们自动再触发一次UseAction[UseType==1].
+                    // 系统插入的这个貌似会自动等待可以插入的时机.
+                    // 为了减少手动插入的损耗, StateUpdate的等待时间一定会小于Animation的时间.
+                    // 也就是说, 系统插入的这个UseAction, 一定会出现在Animation结束之后,
+                    // 即一定会出现在我们的StateUpdate更新完成之后.
+                    if (a.ID == this.LastActionID) {
+                        if(a.Status != ActionStatus.Ready) {
                             this.actionLock.Release();
                             return false;
                         }
-                    } else {
-                        await this.actionLockHighPriority.WaitAsync();
+                        index = this.LastIndex;
+                        caction = ComboActions[index%ComboActions.Count];
                     }
-                } else {
                     await this.actionLockHighPriority.WaitAsync();
                 }
             }
@@ -216,17 +232,17 @@ namespace GamepadTweaks
                 // 抽卡结束, 出卡技能不一定可以立刻可用, 所以等一等.
                 // 目前需要咏唱的技能不可以立即Finished.
                 // PluginLog.Debug($"starting wait for action: {caction.Name} done.");
-                animationDelay = a.Finished ? 150 : 50;
+                animationDelay = a.Finished ? 100 : 0;
                 var aa = DateTime.Now;
-                // PluginLog.Debug($"Try wait. {caction.ID}, finished: {a.Finished}");
+                // PluginLog.Debug($"Try wait. {a.ID}, finished: {a.Finished}. on Group: {GroupID}");
                 if (!await a.Wait()) {
-                    // PluginLog.Debug($"[ComboStateUpdate][Casting] Group: {GroupID}, action: {caction.ID} failed.");
+                    PluginLog.Debug($"[ComboStateUpdate][Casting] Group: {GroupID}, action: {caction.ID} failed.");
                     this.actionLockHighPriority.Release();
                     this.actionLock.Release();
                     return false;
                 }
                 var bb = DateTime.Now;
-                // PluginLog.Debug($"Try wait...done {caction.ID} {(bb-aa).TotalMilliseconds}");
+                // PluginLog.Debug($"Try wait...done {a.ID} {(bb-aa).TotalMilliseconds}");
             }
 
             // 因为可能需要wait, 所以放在这里
@@ -272,7 +288,7 @@ namespace GamepadTweaks
                     // usually by GamepadActionManager.UpdateFramework
                     // or actions in other group
                     if (originalIndex == -1) {
-                        originalIndex = index;
+                        // originalIndex = index;
                         switch (caction.Type)
                         {
                             // 跳NotSatisfied需要确保action已经执行
@@ -369,7 +385,7 @@ namespace GamepadTweaks
                                 break;
                         }
 
-                        // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {Actions[caction.ID]}, id: {caction.ID}, exec?: {caction.Executed}, status: {cstatus}, type: {caction.Type}, count: {caction.Count}, ucount: {caction.MaximumCount}, crgroup: {crgroup}, remain: {cremain}, iscasting: {Plugin.Player!.IsCasting}, usetype: {a.UseType}");
+                        // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {a.Name}, id: {a.ID}, exec?: {caction.Executed}, status: {cstatus}, type: {caction.Type}, count: {caction.Count}, ucount: {caction.MaximumCount}, crgroup: {crgroup}, remain: {cremain}, iscasting: {Plugin.Player!.IsCasting}, usetype: {a.UseType}");
                     }
                     break;
                 case ComboType.Async:
@@ -384,27 +400,37 @@ namespace GamepadTweaks
             // a1! && Ready -> CurrentIndex++
             // wait 20ms
             // a! && Pending -> ??? 应该忽略这个
-            if (originalIndex != -1 && originalIndex != index && CurrentIndex != index) {
-                // if (animationDelay > 0)
-                // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)}");
+            if (originalIndex != -1) {
+                if (originalIndex != index && CurrentIndex != index) {
+                    // if (animationDelay > 0)
+                    // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)}");
 
-                await Task.Delay(animationDelay);
+                    await Task.Delay(animationDelay);
 
-                // 反正能力技之间的插入也有时间间隔, 不如等一等, 放动画
-                await Task.Delay(animationDelay);
+                    // 反正能力技之间的插入也有时间间隔, 不如等一等, 放动画
+                    await Task.Delay(animationDelay);
 
-                // 切换到下一个action之前把当前action的状态复位
-                caction.Restore();
-                CurrentIndex = index % ComboActions.Count;
+                    // 切换到下一个action之前把当前action的状态复位
+                    caction.Restore();
 
-                // CurrentIndex更新之后不代表就立刻转移到了下一个技能, 到GetIcon更新技能图标还有一段时间.
-                // 继续sleep, 留给GetIcon一点时间, 到图标更新完成.
-                await Task.Delay(50);
+                    var lastIndex = CurrentIndex;
+                    CurrentIndex = index % ComboActions.Count;
 
-                // 应该做出假设: 此时已经成功转移到下一个技能, 并且技能图标已经更新.
-                // 那么需要把这之前等待的其它Task全部清除. 只处理在这之后发出的Task.
-                this.LastTime = DateTime.Now;
-                // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)} done");
+                    // CurrentIndex更新之后不代表就立刻转移到了下一个技能, 到GetIcon更新技能图标还有一段时间.
+                    // 继续sleep, 留给GetIcon一点时间, 到图标更新完成.
+                    await Task.Delay(150);
+
+                    // 应该做出假设: 此时已经成功转移到下一个技能, 并且技能图标已经更新.
+                    // 那么需要把这之前等待的其它Task全部清除. 只处理在这之后发出的Task.
+                    this.LastTime = DateTime.Now;
+                    this.LastActionID = a.ID;   // <---
+                    this.LastIndex = lastIndex;
+                    // PluginLog.Debug($"lasttime update to: {this.LastTime.Second}:{this.LastTime.Millisecond}");
+                    // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)} done");
+                }
+            } else {
+                // if (CurrentIndex != index) CurrentIndex = index;
+                CurrentIndex = index;
             }
 
             this.actionLockHighPriority.Release();
@@ -441,9 +467,9 @@ namespace GamepadTweaks
             }
         }
 
-        public async Task<bool> StateUpdate(GameAction a, bool succeed = true, DateTime timestamp = default(DateTime))
+        public async Task<bool> StateUpdate(GameAction a, bool succeed = true)
         {
-            return (await Task.WhenAll(ComboGroups.Select(i => i.Value.StateUpdate(a, succeed, timestamp)).ToArray())).Any();
+            return (await Task.WhenAll(ComboGroups.Select(i => i.Value.StateUpdate(a, succeed)).ToArray())).Any();
         }
 
         public uint Current(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => ComboGroups.ContainsKey(groupID) ? ComboGroups[groupID].Current(lastComboAction, comboTimer) : groupID;

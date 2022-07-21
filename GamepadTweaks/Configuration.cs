@@ -104,7 +104,7 @@ namespace GamepadTweaks
 
         public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.ComboManager.Current(groupID, lastComboAction, comboTimer);
         public void ResetComboState(uint groupID) => this.ComboManager.StateReset(groupID);
-        public async Task<bool> UpdateComboState(GameAction a, bool succeed = true, DateTime timestamp = default(DateTime)) => await this.ComboManager.StateUpdate(a, succeed, timestamp);
+        public async Task<bool> UpdateComboState(GameAction a, bool succeed = true) => await this.ComboManager.StateUpdate(a, succeed);
 
         public bool Update(string content = "")
         {
@@ -246,7 +246,7 @@ namespace GamepadTweaks
                         PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} iscombo: {comboID}");
 
                         return new ComboAction() {
-                            Action = new GameAction() { ID = id },
+                            ID = id,
                             Type = comboActionType,
                             MinimumCount = minCount,
                             MaximumCount = maxCount,

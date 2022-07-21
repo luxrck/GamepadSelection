@@ -70,7 +70,7 @@ namespace GamepadTweaks
         public bool IsValid => this.ID > 0;
         public bool IsCasting => Plugin.Player is not null && Plugin.Player.IsCasting && Plugin.Actions.Equals(Plugin.Player.CastActionId, ID);
 
-        // 由于即刻咏唱的存在, CastTime必须动态获取
+        // 由于即刻咏唱等的存在, CastTime必须动态获取
         // TODO: Should get Action cast detail info even not in casting.
         public uint CastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: false);
         public uint AdjustedCastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: true);
@@ -111,19 +111,24 @@ namespace GamepadTweaks
                     // why reach here ???
                     // abbbb[bc]. bc成功,且都需要咏唱.
                     // UseAction[b], b is casting -> Put(b) -> UseAction[c], c is casting -> UpdateState(b) -> Put(c) -> UpdteState(c)
-                    return false;
+                    return true;
                 }
             } else {
-                // if (CastTimeTotalMilliseconds > 0) {
-                //     // 应该咏唱但是确没有, 被打断了?
-                //     // if ((DateTime.Now - LastTime).TotalMilliseconds < CastTimeTotalMilliseconds) return false;
-                //     // 应该咏唱但是超出了时间, 被阻塞太久了?
-                //     // if ((DateTime.Now - LastTime).TotalMilliseconds >= CastTimeTotalMilliseconds) return false;
-                //     return false;
-                // } else {
-                //     return true;
-                // }
-                return false;
+                if (AdjustedCastTimeTotalMilliseconds > 0) {
+                    // 应该咏唱但是确没有, 被打断了?
+                    // 目前StateUpdate等待200ms, 不会超过AnimationLock的时间.
+                    // StateUpdate(0)是不会阻塞的.
+                    // 因此一个正常的Action不应该会由于在队列里等待过久而造成中间状态更新了
+                    if ((DateTime.Now - LastTime).TotalMilliseconds < CastTimeTotalMilliseconds) {
+                        await Task.Delay((int)(AdjustedCastTimeTotalMilliseconds - Configuration.GlobalCoolingDown.SlidingWindow));
+                        return true;
+                    } else {
+                        // 真要这样那只能丢弃了
+                        return false;
+                    }
+                } else {
+                    return true;
+                }
             }
         }
     }
@@ -229,7 +234,7 @@ namespace GamepadTweaks
             // }
 
             try {
-                var content = File.ReadAllText(Configuration.ActionFile.ToString());
+                var content = File.ReadAllText(Configuration.ActionFile);
                 var infos = JsonConvert.DeserializeObject<List<ActionInfo>>(content) ?? new List<ActionInfo>();
                 foreach (var info in infos) {
                     if (!ActionsInfoMap.ContainsKey(info.ID)) {
@@ -241,6 +246,7 @@ namespace GamepadTweaks
                         ActionsNameMap[info.Name] = info.ID;
                     }
                 }
+                PluginLog.Debug($"Load Action Info Data: {Configuration.ActionFile}");
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
             }
