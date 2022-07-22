@@ -32,6 +32,7 @@ namespace GamepadTweaks
         Unk_571 = 571,
         NotSatisfied = 572,
         NotLearned = 573,
+        Unk_574 = 574,
         // 咏唱时间内
         Locking = 580,
         Unk_581 = 581,
@@ -74,6 +75,7 @@ namespace GamepadTweaks
         // TODO: Should get Action cast detail info even not in casting.
         public uint CastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: false);
         public uint AdjustedCastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: true);
+        public uint AdjustedReastTimeTotalMilliseconds => (uint)(Plugin.Actions.RecastTimeRemain(ID) * 1000);
 
         public bool CanCastImmediatly => AdjustedCastTimeTotalMilliseconds == 0;
         public bool Finished = false;
@@ -93,42 +95,52 @@ namespace GamepadTweaks
 
             if (me.IsCasting) {
                 if (Plugin.Actions.Equals(me.CastActionId, ID)) {
-                    var current = (int)(me.CurrentCastTime * 1000);
+                    var start = (int)(me.CurrentCastTime * 1000);
                     var total = (int)(me.TotalCastTime * 1000);
-                    var delay = 100;
+
+                    var delay = 10;
+                    var eps = 200;
+
+                    var current = start;
+
+                    if (total - current < Configuration.GlobalCoolingDown.SlidingWindow) return false;
+
                     // 滑步!!!
-                    while (current < total - Configuration.GlobalCoolingDown.SlidingWindow) {
+                    var before = DateTime.Now;
+                    while (current < total) {
                         await Task.Delay(delay);
-                        if (!me.IsCasting) {
-                            return false;
-                        }
+                        if (me.CurrentCastTime == 0 || me.TotalCastTime == 0) break;
+                        if (me.CurrentCastTime >= me.TotalCastTime - eps / 100) break;
+                        if (!me.IsCasting) break;
                         current += delay;
                     }
-                    // PluginLog.Debug($"[Casting] action: {Plugin.Actions.Name(ID)}, wait: {total - Configuration.GlobalCoolingDown.SlidingWindow}, total: {total}");
-                    Finished = true;
-                    return true;
+                    var after = DateTime.Now;
+                    PluginLog.Debug($"[Casting] action: {Plugin.Actions.Name(ID)}, start: {start}, total: {total} {after - before}");
+                    if ((after - before).TotalMilliseconds >= (total - start - eps)) Finished = true;
+                    return Finished;
                 } else {
                     // why reach here ???
                     // abbbb[bc]. bc成功,且都需要咏唱.
                     // UseAction[b], b is casting -> Put(b) -> UseAction[c], c is casting -> UpdateState(b) -> Put(c) -> UpdteState(c)
-                    return true;
+                    return false;
                 }
             } else {
-                if (AdjustedCastTimeTotalMilliseconds > 0) {
-                    // 应该咏唱但是确没有, 被打断了?
-                    // 目前StateUpdate等待200ms, 不会超过AnimationLock的时间.
-                    // StateUpdate(0)是不会阻塞的.
-                    // 因此一个正常的Action不应该会由于在队列里等待过久而造成中间状态更新了
-                    if ((DateTime.Now - LastTime).TotalMilliseconds < CastTimeTotalMilliseconds) {
-                        await Task.Delay((int)(AdjustedCastTimeTotalMilliseconds - Configuration.GlobalCoolingDown.SlidingWindow));
-                        return true;
-                    } else {
-                        // 真要这样那只能丢弃了
-                        return false;
-                    }
-                } else {
-                    return true;
-                }
+                return false;
+                // if (AdjustedCastTimeTotalMilliseconds > 0) {
+                //     // 应该咏唱但是确没有, 被打断了?
+                //     // 目前StateUpdate等待200ms, 不会超过AnimationLock的时间.
+                //     // StateUpdate(0)是不会阻塞的.
+                //     // 因此一个正常的Action不应该会由于在队列里等待过久而造成中间状态更新了
+                //     if ((DateTime.Now - LastTime).TotalMilliseconds < CastTimeTotalMilliseconds) {
+                //         await Task.Delay((int)(AdjustedCastTimeTotalMilliseconds - Configuration.GlobalCoolingDown.SlidingWindow));
+                //         return true;
+                //     } else {
+                //         // 真要这样那只能丢弃了
+                //         return false;
+                //     }
+                // } else {
+                //     return true;
+                // }
             }
         }
     }
@@ -194,13 +206,19 @@ namespace GamepadTweaks
     public class Actions
     {
         public string AliasInfo = @"
-            抽卡        <- { 太阳神之衡, 放浪神之箭, 战争神之枪, 世界树之干, 河流神之瓶, 建筑神之塔 }
-            小奥秘卡    <- { 王冠之领主, 王冠之贵妇 }
+            出卡        <- { 太阳神之衡, 放浪神之箭, 战争神之枪, 世界树之干, 河流神之瓶, 建筑神之塔 }
+            出王冠卡    <- { 王冠之领主, 王冠之贵妇 }
             迸裂        <- 三重灾祸
+                        <- 星极核爆
+                        <- 炼狱之炎
             毁荡        <- 毁灭(召) <- 毁坏(召)
                         <- 星极脉冲
+                        <- 灵泉之炎
             星极超流    <- 死星核爆
+                        <- 苏生之炎
             以太蓄能    <- 龙神附体 <- 龙神召唤
+                        <- 不死鸟召唤
+            龙神迸发    <- 不死鸟迸发
             宝石耀      <- 红宝石毁灭 <- 红宝石毁坏 <- 红宝石毁荡 <- 红宝石之仪
                         <- 绿宝石毁灭 <- 绿宝石毁坏 <- 绿宝石毁荡 <- 绿宝石之仪
                         <- 黄宝石毁灭 <- 黄宝石毁坏 <- 黄宝石毁荡 <- 黄宝石之仪
@@ -212,9 +230,6 @@ namespace GamepadTweaks
             黄宝石召唤  <- 土神召唤";
 
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
-        private Dictionary<uint, uint> AliasMap0 = new Dictionary<uint, uint>();
-
-        // private Dictionary<uint, GameAction> ActionsMap = new Dictionary<uint, GameAction>();
         private Dictionary<uint, ActionInfo> InfoMap = new Dictionary<uint, ActionInfo>();
         private Dictionary<string, Dictionary<string, uint>> NameMap = new Dictionary<string, Dictionary<string, uint>>();
 
@@ -245,7 +260,7 @@ namespace GamepadTweaks
                 }
 
                 BuildAliasInfo();
-                TestAliasInfo();
+                // TestAliasInfo();
 
                 PluginLog.Debug($"Load Action Info Data: {Configuration.ActionFile}");
             } catch(Exception e) {

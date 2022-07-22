@@ -65,6 +65,7 @@ namespace GamepadTweaks
         public DateTime LastTime;
         public uint LastActionID;
         public bool InComboState => Marshal.PtrToStructure<float>(this.comboTimerPtr) > 0f;
+        public uint LastComboAction => (uint)Marshal.ReadInt32(this.lastComboActionPtr);
 
         // private Channel<(uint, ActionStatus, bool)> executedActions = Channel.CreateUnbounded<(uint, ActionStatus, bool)>();
         private Channel<(GameAction, bool)> executedActions = Channel.CreateUnbounded<(GameAction, bool)>();
@@ -117,9 +118,9 @@ namespace GamepadTweaks
             var me = Plugin.Player;
 
             // reset combo state if out of combat.
-            if (!me.StatusFlags.HasFlag(StatusFlags.InCombat) && !me.StatusFlags.HasFlag(StatusFlags.WeaponOut)) {
-                Plugin.Config.ResetComboState(0);
-            }
+            // if (!me.StatusFlags.HasFlag(StatusFlags.InCombat) && !me.StatusFlags.HasFlag(StatusFlags.WeaponOut)) {
+            //     Plugin.Config.ResetComboState(0);
+            // }
 
             // macro
             Task.Run(async () => {
@@ -186,7 +187,8 @@ namespace GamepadTweaks
                             await Config.UpdateComboState(a.Action, a.Result);
                         }
                     } else {
-                        await Config.UpdateComboState(new GameAction() {ID = 0});
+                        await Task.Delay(50);
+                        await Config.UpdateComboState(new GameAction() {ID = 0, Finished = true});
                     }
                 } catch(Exception e) {
                     PluginLog.Error($"Exception: {e}");

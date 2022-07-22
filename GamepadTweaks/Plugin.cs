@@ -115,6 +115,8 @@ namespace GamepadTweaks
                 var argv = args.Trim().Split(" ", 2).Where(a => a != "").ToList();
                 switch(argv[0])
                 {
+                    case "test":
+                        return;
                     case "on":
                         Echo("[GamepadTweaks] Enabled.");
                         GamepadActionManager.Enable();
