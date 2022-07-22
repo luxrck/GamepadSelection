@@ -185,7 +185,7 @@ namespace GamepadTweaks
                     case "reset":
                         uint groupID = 0;
                         if (argv.Count > 1) {
-                            groupID = Actions[argv[1].Trim()];
+                            groupID = Actions.ID(argv[1].Trim());
                         }
                         Config.ResetComboState(groupID);
                         return;

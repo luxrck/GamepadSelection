@@ -193,62 +193,116 @@ namespace GamepadTweaks
 
     public class Actions
     {
-        private Dictionary<uint, uint[]> AliasInfo = new Dictionary<uint, uint[]>() {
-            // AST
-            { 17055, new uint[] {4401, 4402, 4403, 4404, 4405, 4406} },   // 出卡
-            { 25869, new uint[] {7444, 7445} }, // 出王冠卡
-
-            // SMN
-            { 25822, new uint[] {3582} },    // 星极超流
-            { 3579,  new uint[] {25820} },   // 毁荡
-            { 16511, new uint[] {25826} },   // 迸裂
-            { 25883, new uint[] {25825, 25824, 25823, 25819, 25818, 25817, 25813, 25812, 25811, 25810, 25809, 25808} },    // 宝石耀
-            { 25884, new uint[] {25829, 25828, 25827, 25816, 25815, 25814} },    // 宝石辉
-            { 25800, new uint[] {3581, 7427} },    //以太蓄能
-            { 25804, new uint[] {25807} },   // 绿
-            { 25803, new uint[] {25806} },   // 黄
-            { 25802, new uint[] {25805} },   // 红
-        };
+        public string AliasInfo = @"
+            抽卡        <- { 太阳神之衡, 放浪神之箭, 战争神之枪, 世界树之干, 河流神之瓶, 建筑神之塔 }
+            小奥秘卡    <- { 王冠之领主, 王冠之贵妇 }
+            迸裂        <- 三重灾祸
+            毁荡        <- 毁灭(召) <- 毁坏(召)
+                        <- 星极脉冲
+            星极超流    <- 死星核爆
+            以太蓄能    <- 龙神附体 <- 龙神召唤
+            宝石耀      <- 红宝石毁灭 <- 红宝石毁坏 <- 红宝石毁荡 <- 红宝石之仪
+                        <- 绿宝石毁灭 <- 绿宝石毁坏 <- 绿宝石毁荡 <- 绿宝石之仪
+                        <- 黄宝石毁灭 <- 黄宝石毁坏 <- 黄宝石毁荡 <- 黄宝石之仪
+            宝石辉      <- 红宝石迸裂 <- 红宝石灾祸
+                        <- 黄宝石迸裂 <- 黄宝石灾祸
+                        <- 绿宝石迸裂 <- 绿宝石灾祸
+            红宝石召唤  <- 火神召唤
+            绿宝石召唤  <- 风神召唤
+            黄宝石召唤  <- 土神召唤";
 
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
+        private Dictionary<uint, uint> AliasMap0 = new Dictionary<uint, uint>();
 
         // private Dictionary<uint, GameAction> ActionsMap = new Dictionary<uint, GameAction>();
-        private Dictionary<uint, ActionInfo> ActionsInfoMap = new Dictionary<uint, ActionInfo>();
-        private Dictionary<string, uint> ActionsNameMap = new Dictionary<string, uint>();
+        private Dictionary<uint, ActionInfo> InfoMap = new Dictionary<uint, ActionInfo>();
+        private Dictionary<string, Dictionary<string, uint>> NameMap = new Dictionary<string, Dictionary<string, uint>>();
 
         public Actions()
         {
-            foreach (var a in AliasInfo) {
-                foreach (var b in a.Value) {
-                    AliasMap[b] = a.Key;
-                }
-                AliasMap[a.Key] = a.Key;
-            }
-
-            // foreach (var (lang, name, id) in ActionsInfo) {
-            //     if (!ActionsMap.ContainsKey(id))
-            //         ActionsMap[id] = new GameAction() {
-            //             ID = id,
-            //         };
-            //     ActionsMap[id].Names[lang] = name;
-            // }
-
             try {
                 var content = File.ReadAllText(Configuration.ActionFile);
                 var infos = JsonConvert.DeserializeObject<List<ActionInfo>>(content) ?? new List<ActionInfo>();
+
+                var langs = new string[] {"zh", "en", "jp", "fr", "de"};
+
+                foreach(var lang in langs) {
+                    NameMap[lang] = new Dictionary<string, uint>();
+                }
+
                 foreach (var info in infos) {
-                    if (!ActionsInfoMap.ContainsKey(info.ID)) {
-                        ActionsInfoMap[info.ID] = info;
+                    if (!InfoMap.ContainsKey(info.ID)) {
+                        InfoMap[info.ID] = info;
                     }
-                    if (ActionsNameMap.ContainsKey(info.Name)) {
-                        PluginLog.Warning($"Duplicate actions: {info.Name}. {ActionsNameMap[info.Name]} already exists while incoming {info.ID}");
-                    } else {
-                        ActionsNameMap[info.Name] = info.ID;
+
+                    foreach (var lang in langs) {
+                        if (!NameMap[lang].ContainsKey(info.Name)) {
+                            NameMap[lang][info.Name] = info.ID;
+                        } else {
+                            PluginLog.Warning($"Duplicate actions: {info.Name}. action id: {NameMap[lang][info.Name]} already exists while incoming {info.ID}");
+                        }
                     }
                 }
+
+                BuildAliasInfo();
+                TestAliasInfo();
+
                 PluginLog.Debug($"Load Action Info Data: {Configuration.ActionFile}");
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
+            }
+        }
+
+        private void BuildAliasInfo()
+        {
+            var previousRoot = 0u;
+            var lines = AliasInfo.Split("\n").Select(x => x.Trim()).Where(x => !String.IsNullOrEmpty(x)).ToList();
+            foreach (var line in lines) {
+                var components = line.Split("<-", 2);
+                var root = components[0].Trim();
+                var children = components[1].Trim();
+
+                var rootID = ID(root, lang: "zh");
+
+                if (rootID == 0) rootID = previousRoot;
+                if (rootID == 0) {
+                    PluginLog.Warning($"[BuildAliasInfo] No root?: {line}");
+                    continue;
+                }
+
+                if (children.StartsWith("{") && children.EndsWith("}")) {
+                    var nodes = children[1..^1].Split(",").Select(x => x.Trim()).Where(x => !String.IsNullOrEmpty(x));
+                    foreach (var node in nodes) {
+                        var nodeID = ID(node, lang: "zh");
+                        if (nodeID != 0) {
+                            AliasMap[nodeID] = rootID;
+                        } else {
+                            PluginLog.Warning($"[BuildAliasIndo] Invalid action: {node}");
+                        }
+                    }
+                } else {
+                    var previousNode = rootID;
+                    var nodes = children.Split("<-").Select(x => x.Trim()).Where(x => !String.IsNullOrEmpty(x));
+                    foreach (var node in nodes) {
+                        var nodeID = ID(node, lang: "zh");
+                        if (nodeID != 0) {
+                            AliasMap[nodeID] = previousNode;
+                            previousNode = nodeID;
+                        } else {
+                            PluginLog.Warning($"[BuildAliasIndo] Invalid action: {node}");
+                        }
+                    }
+                }
+
+                AliasMap[rootID] = 0;
+                previousRoot = rootID;
+            }
+        }
+
+        private void TestAliasInfo()
+        {
+            foreach (var i in AliasMap) {
+                PluginLog.Debug($"{Name(i.Value)} <- {Name(i.Key)}");
             }
         }
 
@@ -264,12 +318,39 @@ namespace GamepadTweaks
             }
         }
 
-        public bool Contains(string action) => ActionsNameMap.ContainsKey(action);
-        public bool Equals(uint a1, uint a2) => BaseActionID(a1) == BaseActionID(a2);
+        public bool Contains(string action, string lang = "auto") => NameMap[lang == "auto" ? Plugin.ClientLanguage : lang].ContainsKey(action);
+        public bool Contains(uint action) => InfoMap.ContainsKey(action);
 
-        public uint this[string a] => Contains(a) ? ActionsNameMap[a] : 0;
-        public ActionInfo? this[uint i] => ActionsInfoMap.ContainsKey(i) ? ActionsInfoMap[i] : null;
-        public uint ID(string a) => this[a];
+        public bool Equals(uint a1, uint a2) => IsSameAction(a1, a2);
+        public bool IsSameAction(uint a1, uint a2)
+        {
+            if (a1 == a2) return true;
+            if (!AliasMap.ContainsKey(a1) || !AliasMap.ContainsKey(a2)) return false;
+
+            var n = a1;
+            while (AliasMap.ContainsKey(n)) {
+                if (n == a2) return true;
+                n = AliasMap[n];
+            }
+
+            n = a2;
+            while (AliasMap.ContainsKey(n)) {
+                if (n == a1) return true;
+                n = AliasMap[n];
+            }
+
+            return false;
+        }
+        public bool InSameAliasGroup(uint a1, uint a2)
+        {
+            while (AliasMap.ContainsKey(a1)) a1 = AliasMap[a1];
+            while (AliasMap.ContainsKey(a2)) a2 = AliasMap[a2];
+            return a1 == a2;
+        }
+
+        public ActionInfo? this[string a, string lang = "auto"] => Contains(a, lang) ? InfoMap[NameMap[lang == "auto" ? Plugin.ClientLanguage : lang][a]] : null;
+        public ActionInfo? this[uint a] => Contains(a) ? InfoMap[a] : null;
+        public uint ID(string a, string lang = "auto") => this[a, lang]?.ID ?? 0;
         public string Name(uint i) => this[i]?.Name ?? String.Empty;
 
         public uint BaseActionID(uint actionID) => AliasMap.ContainsKey(actionID) ? AliasMap[actionID] : actionID;
@@ -342,17 +423,20 @@ namespace GamepadTweaks
         // *Repertoire 1/2/3/4  4, 8, 12, 16
         public uint Cooldown(uint actionID, bool adjusted = true)
         {
+            // Lv.0 ~ Lv.90
             var SUB = new uint[] {55, 56, 57, 60, 62, 65, 68, 70, 73, 76, 78, 82, 85, 89, 93, 96, 100, 104, 109, 113, 116, 122, 127, 133, 138, 144, 150, 155, 162, 168, 173, 181, 188, 194, 202, 209, 215, 223, 229, 236, 244, 253, 263, 272, 283, 292, 302, 311, 322, 331, 341, 342, 344, 345, 346, 347, 349, 350, 351, 352, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 370, 372, 374, 376, 378, 380, 382, 384, 386, 388, 390, 392, 394, 396, 398, 400};
             var DIV = new uint[] {55, 56, 57, 60, 62, 65, 68, 70, 73, 76, 78, 82, 85, 89, 93, 96, 100, 104, 109, 113, 116, 122, 127, 133, 138, 144, 150, 155, 162, 168, 173, 181, 188, 194, 202, 209, 215, 223, 229, 236, 244, 253, 263, 272, 283, 292, 302, 311, 322, 331, 341, 366, 392, 418, 444, 470, 496, 522, 548, 574, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 940, 980, 1020, 1060, 1100, 1140, 1180, 1220, 1260, 1300, 1360, 1420, 1480, 1540, 1600, 1660, 1720, 1780, 1840, 1900};
 
             const uint Swiftcast = 167;         // 即刻咏唱
             const uint Lightspeed = 841;        // 光速
+            const uint Dualcast = 1249;         // 连续咏唱 : 赤魔 : 被动 1级
 
-            const uint LeyLines = 737;          // 黑魔纹
-            const uint PresenceOfMind = 157;    // 神速咏唱
+            const uint LeyLines = 737;          // 黑魔纹       -15%
+            const uint PresenceOfMind = 157;    // 神速咏唱     -20%
             // const uint Shifu = 7479;           // 士风
             // const uint BloodWeapon = 3625;     // 嗜血
-            const uint Huton = 500;             // 风遁之术
+            const uint Huton = 500;             // 风遁之术     -15%
+            const uint HarmonyOfBody = 2715;    // 身体之座     -10%
 
             var me = Plugin.Player;
 
@@ -369,8 +453,11 @@ namespace GamepadTweaks
             var ss = cast > 0 ? Plugin.PlayerSpellSpeed : Plugin.PlayerSkillSpeed;
 
             var lv = me.Level;
+
             var speedBuff = 0;
             var haste = 0;
+
+            // TODO: 黑魔: 雷云, 冰火技能等
             var astral_umbral = 100;
 
             Func<double> f = () => (1000 + 130 * (ss - SUB[lv]) / DIV[lv]);
@@ -386,6 +473,7 @@ namespace GamepadTweaks
                 {
                     case Swiftcast:
                     case Lightspeed:
+                    case Dualcast:
                         return 0;
                     case LeyLines:
                         speedBuff += 15; break;
@@ -397,6 +485,8 @@ namespace GamepadTweaks
                     //     speedBuff += 10; break;
                     case Huton:
                         speedBuff += 15; break;
+                    case HarmonyOfBody:
+                        speedBuff += 10; break;
                 }
             }
 

@@ -153,7 +153,7 @@ namespace GamepadTweaks
                 var gs = new HashSet<uint>();
                 foreach(string s in this.gs) {
                     if (Actions.Contains(s)) {
-                        gs.Add(Actions[s]);
+                        gs.Add(Actions.ID(s));
                     }
                 }
                 this.gsActions = gs;
@@ -161,7 +161,7 @@ namespace GamepadTweaks
                 var gtoff = new HashSet<uint>();
                 foreach(string s in this.gtoff) {
                     if (Actions.Contains(s)) {
-                        gtoff.Add(Actions[s]);
+                        gtoff.Add(Actions.ID(s));
                     }
                 }
                 this.gtoffActions = gtoff;
@@ -170,7 +170,7 @@ namespace GamepadTweaks
                 foreach(var i in this.rules) {
                     uint actionID = 0;
                     if (Actions.Contains(i.Key)) {
-                        actionID = Actions[i.Key];
+                        actionID = Actions.ID(i.Key);
                     } else {
                         try {
                             actionID = UInt32.Parse(i.Key);
@@ -241,9 +241,9 @@ namespace GamepadTweaks
                                 }
                                 break;
                         }
-                        var id = Actions[action.Trim()];
+                        var id = Actions.ID(action.Trim());
 
-                        PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} iscombo: {comboID}");
+                        // PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} subgroup: {comboID}");
 
                         return new ComboAction() {
                             ID = id,
@@ -254,7 +254,7 @@ namespace GamepadTweaks
                         };
                     }).ToList();
 
-                    var groupID = Actions[ss[2].Trim()];
+                    var groupID = Actions.ID(ss[2].Trim());
 
                     // 如果有不合法的action, 此链作废
                     if (groupID == 0 || comboActions.Any(x => !x.IsValid)) {

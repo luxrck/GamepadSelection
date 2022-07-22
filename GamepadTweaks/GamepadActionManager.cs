@@ -181,9 +181,8 @@ namespace GamepadTweaks
 
                 try {
                     if (this.executedActions.Reader.TryRead(out (GameAction Action, bool Result) a)) {
-
+                        // PluginLog.Debug($"[UpdateComboStateAsync] update action: {a.Action.ID}, iscombo?: {Config.IsComboAction(a.Action.ID)} {Actions.Equals(25800, 7429)}");
                         if (Config.IsComboAction(a.Action.ID)) {
-                            // PluginLog.Debug($"[UpdateComboStateAsync] update combo action: {a.Action.ID}");
                             await Config.UpdateComboState(a.Action, a.Result);
                         }
                     } else {
@@ -429,7 +428,7 @@ namespace GamepadTweaks
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                         this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        // PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, {status}, iscasting: {me.IsCasting}, casttime: {a.AdjustedCastTimeTotalMilliseconds}, action: {Plugin.Actions.Name(adjustedID)}, ID: {adjustedID}, UseType: {a.UseType}");
+                        PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, {status}, iscasting: {me.IsCasting}, casttime: {a.AdjustedCastTimeTotalMilliseconds}, action: {Plugin.Actions.Name(adjustedID)}, ID: {adjustedID}, UseType: {a.UseType}");
                     }
 
                     this.state = GamepadActionManagerState.Start;
@@ -458,7 +457,7 @@ namespace GamepadTweaks
                     PluginLog.Debug($"[UseAction] executedActions write failed.");
                 }
             }
-PluginLog.Debug($"{me.StatusFlags}");
+
             return ret;
         }
 

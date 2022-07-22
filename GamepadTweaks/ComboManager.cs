@@ -215,8 +215,9 @@ namespace GamepadTweaks
             // a1 a2[notlearned] a3
             // 如果a1 a2是同一group, a1执行完之后, 查询a2的status将会是pending或locking
             // 等到a2真正可以被执行的时候(比如下一个gcd开始), 它的status才会变成ready(或notlearned等)
-            if (cstatus == ActionStatus.NotLearned && caction.Type != ComboActionType.Blocking) {
-                // PluginLog.Debug($"[ComboStateUpdate] action not learned. {Actions.Name(caction.ID)} at {CurrentIndex} of Group: {GroupID}. Triggerd by {actionID}");
+            // if (cstatus == ActionStatus.NotLearned && caction.Type != ComboActionType.Blocking) {
+            if (cstatus == ActionStatus.NotLearned) {
+                // PluginLog.Debug($"[ComboStateUpdate] action not learned. {Actions.Name(caction.ID)} at {CurrentIndex} of Group: {GroupID}. Triggerd by {a.Name}");
                 CurrentIndex = (index + 1) % ComboActions.Count;
                 this.actionLockHighPriority.Release();
                 this.actionLock.Release();
@@ -236,7 +237,7 @@ namespace GamepadTweaks
                 var aa = DateTime.Now;
                 // PluginLog.Debug($"Try wait. {a.ID}, finished: {a.Finished}. on Group: {GroupID}");
                 if (!await a.Wait()) {
-                    PluginLog.Debug($"[ComboStateUpdate][Casting] Group: {GroupID}, action: {caction.ID} failed.");
+                    // PluginLog.Debug($"[ComboStateUpdate][Casting] Group: {GroupID}, action: {caction.ID} failed.");
                     this.actionLockHighPriority.Release();
                     this.actionLock.Release();
                     return false;
@@ -385,7 +386,7 @@ namespace GamepadTweaks
                                 break;
                         }
 
-                        // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {a.Name}, id: {a.ID}, exec?: {caction.Executed}, status: {cstatus}, type: {caction.Type}, count: {caction.Count}, ucount: {caction.MaximumCount}, crgroup: {crgroup}, remain: {cremain}, iscasting: {Plugin.Player!.IsCasting}, usetype: {a.UseType}");
+                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {a.Name}, id: {a.ID}, exec?: {caction.Executed}, status: {cstatus}, type: {caction.Type}, count: {caction.Count}, ucount: {caction.MaximumCount}, crgroup: {crgroup}, remain: {cremain}, iscasting: {Plugin.Player!.IsCasting}, usetype: {a.UseType}");
                     }
                     break;
                 case ComboType.Async:
@@ -425,7 +426,7 @@ namespace GamepadTweaks
                     this.LastTime = DateTime.Now;
                     this.LastActionID = a.ID;   // <---
                     this.LastIndex = lastIndex;
-                    // PluginLog.Debug($"lasttime update to: {this.LastTime.Second}:{this.LastTime.Millisecond}");
+                    PluginLog.Debug($"lasttime update to: {this.LastTime.Second}:{this.LastTime.Millisecond}");
                     // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)} done");
                 }
             } else {
