@@ -16,7 +16,7 @@ Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party m
 ##### Gtoff
 Support and extend `<gtoff>` like casting type using gamepad. If we already target a GameObject (enemy, party member, etc), then it will use the position of the target (`/ac xx <t>`). Otherwise it acts just like `<gtoff>` macros (`/ac xx <gtoff>`).
 
-vs. `/ac xx <t>`: We put GtAction into queue and execute it when ready instead of must wait a certain time to manually trigger that action. If `actionAutoDelay == true`, these two are same.
+vs. `/ac xx <t>`: We put GtAction into queue and execute it when ready instead of must wait a certain time to manually trigger that action. If `actionSchedule != none`, these two are same.
 
 ##### Targeting
 Auto targeting the nearest enemy (if not) when casting actions. Damage actions will ignore the **SoftTarget** now, only Buffs could take use of it.
@@ -52,7 +52,9 @@ autoTargeting: true
 alwaysTargetingNearestEnemy: false
 
 # Serial execute /ac commands in macro.
-actionAutoDelay: false
+# none, preemptive, non-preemptive
+actionSchedule: non-preemptive
+actionRetry: 1
 
 # Default select order for gs actions.
 # y → left <=> party member no.1 → no.8

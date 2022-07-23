@@ -67,15 +67,17 @@ namespace GamepadTweaks
 
         // public DateTime DelayTo = DateTime.Now;
 
-        public bool Targeted => TargetID != Configuration.DefaultInvalidGameObjectID;
+        public bool HasTarget => TargetID != Configuration.DefaultInvalidGameObjectID;
+        public bool IsTargetingSelf => TargetID == (Plugin.Player?.ObjectId ?? 0);
+        public bool IsTargetingPartyMember => IsTargetingSelf || Plugin.GamepadActionManager.GetSortedPartyMembers().Any(x => x.ID == TargetID);
         public bool IsValid => this.ID > 0;
         public bool IsCasting => Plugin.Player is not null && Plugin.Player.IsCasting && Plugin.Actions.Equals(Plugin.Player.CastActionId, ID);
 
         // 由于即刻咏唱等的存在, CastTime必须动态获取
         // TODO: Should get Action cast detail info even not in casting.
-        public uint CastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: false);
-        public uint AdjustedCastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: true);
-        public uint AdjustedReastTimeTotalMilliseconds => (uint)(Plugin.Actions.RecastTimeRemain(ID) * 1000);
+        public int CastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: false);
+        public int AdjustedCastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: true);
+        public int AdjustedReastTimeTotalMilliseconds => (int)(Plugin.Actions.RecastTimeRemain(ID) * 1000);
 
         public bool CanCastImmediatly => AdjustedCastTimeTotalMilliseconds == 0;
         public bool Finished = false;
@@ -419,7 +421,7 @@ namespace GamepadTweaks
         // Huton   15
         // *Greased Lightning 1/2/3/4   5, 10, 15, 20
         // *Repertoire 1/2/3/4  4, 8, 12, 16
-        public uint Cooldown(uint actionID, bool adjusted = true)
+        public int Cooldown(uint actionID, bool adjusted = true)
         {
             // Lv.0 ~ Lv.90
             var SUB = new uint[] {55, 56, 57, 60, 62, 65, 68, 70, 73, 76, 78, 82, 85, 89, 93, 96, 100, 104, 109, 113, 116, 122, 127, 133, 138, 144, 150, 155, 162, 168, 173, 181, 188, 194, 202, 209, 215, 223, 229, 236, 244, 253, 263, 272, 283, 292, 302, 311, 322, 331, 341, 342, 344, 345, 346, 347, 349, 350, 351, 352, 354, 355, 356, 357, 358, 359, 360, 361, 362, 363, 364, 365, 366, 367, 368, 370, 372, 374, 376, 378, 380, 382, 384, 386, 388, 390, 392, 394, 396, 398, 400};
@@ -438,14 +440,19 @@ namespace GamepadTweaks
 
             var me = Plugin.Player;
 
-            var info = this[actionID];
+            if (me is null) return 0;
 
-            if (me is null || info is null) return (uint)(info?.CastTime ?? 0);
-            if (me.IsCasting && me.CastActionId == info.ID) return (uint)(me.TotalCastTime * 1000);
+            var cast = 0;
+            if (actionID > 0) {
+                var info = this[actionID];
+                if (info is null) return 0;
+                if (me.IsCasting && me.CastActionId == info.ID) return (int)(me.TotalCastTime * 1000);
+                cast = info.CastTime;
+            } else {
+                cast = Configuration.GlobalCoolingDown.TotalMilliseconds;
+            }
 
-            var cast = info.CastTime;
-
-            if (!adjusted) return (uint)cast;
+            if (!adjusted) return cast;
 
             // Spellspeed or Skillspeed
             var ss = cast > 0 ? Plugin.PlayerSpellSpeed : Plugin.PlayerSkillSpeed;
@@ -488,7 +495,7 @@ namespace GamepadTweaks
                 }
             }
 
-            return (uint)(gcd3() / 100);
+            return (int)(gcd3() / 100);
         }
 
         public float RecastTimeRemain(uint actionID)

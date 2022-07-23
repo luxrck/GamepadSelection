@@ -15,13 +15,13 @@ namespace GamepadTweaks
         public static uint DefaultInvalidGameObjectID = 3758096384U;
         public class GlobalCoolingDown
         {
-            public static float TotalSeconds = 2.7f;
-            public static uint TotalMilliseconds = 2700;
-            public static uint AnimationWindow = 700;
-            public static uint SlidingWindow = 500;
+            public static float TotalSeconds = 2.5f;
+            public static int TotalMilliseconds = 2500;
+            public static int AnimationWindow = 700;
+            public static int SlidingWindow = 500;
 
             //实际上也许是最后1/4个GCD时间段
-            public static uint RecastWindow = 500;
+            public static int RecastWindow = 500;
         }
 
         int IPluginConfiguration.Version { get; set; }
@@ -32,18 +32,19 @@ namespace GamepadTweaks
         [YamlMember]
         public bool autoTargeting { get; set; } = false;
         [YamlMember]
-        public bool actionAutoDelay { get; set; } = false;
-        [YamlMember]
         public bool alwaysTargetingNearestEnemy { get; set; } = false;
         [YamlMember]
+        public string actionSchedule { get; set; } = "none";    // none, preemptive, non-preemptive
+        [YamlMember]
+        public int actionRetry { get; set; } = 1;
+        [YamlMember]
+        public string priority { get; set; } = "y b a x up right down left";
         public List<string> gtoff { get; set; } = new List<string>();
         [YamlMember]
         public List<string> gs { get; set; } = new List<string>();
         // public List<string> gs {get; set; } = new List<string>() {
             // "均衡诊断", "白priority", "出卡"
         // };
-        [YamlMember]
-        public string priority { get; set; } = "y b a x up right down left";
         // [JsonProperty]
         // public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
         [YamlMember]
@@ -136,11 +137,12 @@ namespace GamepadTweaks
 
                     this.alwaysInParty = config.alwaysInParty;
                     this.autoTargeting = config.autoTargeting;
-                    this.actionAutoDelay = config.actionAutoDelay;
                     this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
+                    this.actionSchedule = config.actionSchedule;
+                    this.actionRetry = config.actionRetry;
+                    this.priority = config.priority;
                     this.gs = config.gs;
                     this.gtoff = config.gtoff;
-                    this.priority = config.priority;
                     this.combo = config.combo;
                     this.rules = config.rules;
 
