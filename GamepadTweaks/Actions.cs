@@ -212,6 +212,7 @@ namespace GamepadTweaks
         public Actions()
         {
             try {
+                PluginLog.Debug($"Load Action Info Data: {Configuration.ActionFile}");
                 var content = File.ReadAllText(Configuration.ActionFile);
                 var infos = JsonConvert.DeserializeObject<List<ActionInfo>>(content) ?? new List<ActionInfo>();
 
@@ -235,11 +236,11 @@ namespace GamepadTweaks
                     }
                 }
 
+                PluginLog.Debug($"Load Action Alias Data: {Configuration.AliasFile}");
                 var alias = File.ReadAllText(Configuration.AliasFile);
                 BuildAliasInfo(alias);
                 TestAliasInfo();
 
-                PluginLog.Debug($"Load Action Info Data: {Configuration.ActionFile}");
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
             }

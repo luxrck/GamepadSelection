@@ -2,6 +2,8 @@ using Dalamud.Configuration;
 using Dalamud.Logging;
 using Dalamud.Plugin;
 using Newtonsoft.Json;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -25,34 +27,34 @@ namespace GamepadTweaks
         int IPluginConfiguration.Version { get; set; }
 
         #region Saved configuration values
-        [JsonProperty]
+        [YamlMember]
         public bool alwaysInParty { get; set; } = false;
-        [JsonProperty]
+        [YamlMember]
         public bool autoTargeting { get; set; } = false;
-        [JsonProperty]
+        [YamlMember]
         public bool actionAutoDelay { get; set; } = false;
-        [JsonProperty]
+        [YamlMember]
         public bool alwaysTargetingNearestEnemy { get; set; } = false;
-        [JsonProperty]
+        [YamlMember]
         public List<string> gtoff { get; set; } = new List<string>();
-        [JsonProperty]
+        [YamlMember]
         public List<string> gs { get; set; } = new List<string>();
         // public List<string> gs {get; set; } = new List<string>() {
             // "均衡诊断", "白priority", "出卡"
         // };
-        [JsonProperty]
+        [YamlMember]
         public string priority { get; set; } = "y b a x up right down left";
         // [JsonProperty]
         // public string partyMemeberSortOrder {get; set; } = "thmr";  // always put Self in 1st place. eg: [s]thmr
-        [JsonProperty]
-        public List<string> combo { get; set; } = new List<string>();
-        [JsonProperty]
+        [YamlMember]
+        public string combo { get; set; } = String.Empty;
+        [YamlMember]
         public Dictionary<string, string> rules { get; set; } = new Dictionary<string, string>();
         #endregion
 
         // public Dictionary<string, uint> actions;
-        public Actions Actions = Plugin.Actions;
-        public ComboManager ComboManager = new GamepadTweaks.ComboManager();
+        private Actions Actions = Plugin.Actions;
+        private ComboManager ComboManager = new GamepadTweaks.ComboManager();
 
         public static string Root = Plugin.PluginInterface.AssemblyLocation.DirectoryName ?? String.Empty;
         public static string FontFile = Path.Combine(Root, "sarasa-fixed-sc-regular.subset.ttf");
@@ -82,7 +84,12 @@ namespace GamepadTweaks
 
             try {
                 var content = File.ReadAllText(Plugin.PluginInterface.ConfigFile.ToString());
-                config = JsonConvert.DeserializeObject<Configuration>(content) ?? new Configuration();
+                var deserializer = new DeserializerBuilder()
+                    .IgnoreUnmatchedProperties()
+                    .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                    .Build();
+                config = deserializer.Deserialize<Configuration>(content);
+                // config = JsonConvert.DeserializeObject<Configuration>(content) ?? new Configuration();
                 config.content = content;
                 config.UpdateActions();
             } catch(Exception e) {
@@ -111,19 +118,19 @@ namespace GamepadTweaks
         {
             try {
                 if (String.IsNullOrEmpty(content)) {
-                    using (var fs = File.Create(ConfigFile))
-                    using (var sw = new StreamWriter(fs))
-                    using (var jw = new JsonTextWriter(sw) {
-                        Formatting = Formatting.Indented,
-                        Indentation = 1,
-                        IndentChar = '\t'
-                    }) {
-                        (new JsonSerializer()).Serialize(jw, this);
-                    }
-
-                    this.content = File.ReadAllText(ConfigFile);
+                    var serializer = new SerializerBuilder()
+                        .IgnoreFields()
+                        .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                        .Build();
+                    this.content = serializer.Serialize(this);
                 } else {
-                    var config = JsonConvert.DeserializeObject<Configuration>(content);
+                    var deserializer = new DeserializerBuilder()
+                        .IgnoreUnmatchedProperties()
+                        .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                        .Build();
+
+                    var config = deserializer.Deserialize<Configuration>(content);
+                    // var config = JsonConvert.DeserializeObject<Configuration>(content);
 
                     if (config is null) return false;
 
@@ -185,87 +192,7 @@ namespace GamepadTweaks
                 }
                 this.userActions = ua;
 
-                var cg = new List<(uint GroupID, List<ComboAction> ComboActions, string ComboType)>();
-                foreach (string s in this.combo) {
-                    var ss = s.Split(":");
-                    var comboType = ss[0].Trim();
-                    var comboActions = ss[1].Split("->").Where(a => !String.IsNullOrEmpty(a) && !String.IsNullOrWhiteSpace(a)).Select(a => {
-                        var pattern = new Regex(@"(?<action>[\w\s]+\w)(?<type>[\d\,\{\}\*\!\?#]+)?", RegexOptions.Compiled);
-                        var match = pattern.Match(a.Trim());
-                        var action = match.Groups.ContainsKey("action") ? match.Groups["action"].ToString().Trim() : "";
-                        var type = match.Groups.ContainsKey("type") ? match.Groups["type"].ToString().Trim() : "";
-
-                        var comboActionType = ComboActionType.Single;
-                        int minCount = 1;
-                        int maxCount = 1;
-                        var comboID = 0;
-                        switch (type)
-                        {
-                            case "":
-                                comboActionType = ComboActionType.Single; break;
-                            case "?":
-                                comboActionType = ComboActionType.SingleSkipable; break;
-                            case "*":
-                                comboActionType = ComboActionType.Skipable; break;
-                            case "!":
-                                comboActionType = ComboActionType.Blocking; break;
-                            default:
-                                if (type.StartsWith("{")) {
-                                    comboActionType = ComboActionType.Multi;
-                                    var tpattern = new Regex(@"(?<mc>\d+)\s*(,\s*(?<uc>\d+))?\s*}(?<sk>[?])?", RegexOptions.Compiled);
-                                    var tmatch = tpattern.Match(type);
-                                    minCount = Int32.Parse(tmatch.Groups["mc"].ToString());
-                                    if (tmatch.Groups.ContainsKey("uc")) {
-                                        var ucs = tmatch.Groups["uc"].ToString().Trim();
-                                        maxCount = !String.IsNullOrEmpty(ucs) ? Int32.Parse(ucs) : minCount;
-                                    } else {
-                                        maxCount = minCount;
-                                    }
-                                    if (tmatch.Groups.ContainsKey("sk")) {
-                                        var sks = tmatch.Groups["sk"].ToString().Trim();
-                                        if (sks == "?")
-                                            comboActionType = ComboActionType.MultiSkipable;
-                                    }
-                                } else if (type.StartsWith("#")) {
-                                    comboActionType = ComboActionType.Group;
-                                    var gs = type.Substring(1);
-                                    if (String.IsNullOrEmpty(gs)) {
-                                        comboID = 1;
-                                    } else {
-                                        try {
-                                            comboID = Int32.Parse(type.Substring(1));
-                                        } catch(Exception e) {
-                                            PluginLog.Debug($"Exception: {e}");
-                                            comboID = 1;
-                                        }
-                                    }
-                                }
-                                break;
-                        }
-                        var id = Actions.ID(action.Trim());
-
-                        PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} subgroup: {comboID}");
-
-                        return new ComboAction() {
-                            ID = id,
-                            Type = comboActionType,
-                            MinimumCount = minCount,
-                            MaximumCount = maxCount,
-                            Group = comboID,
-                        };
-                    }).ToList();
-
-                    var groupID = Actions.ID(ss[2].Trim());
-
-                    // 如果有不合法的action, 此链作废
-                    if (groupID == 0 || comboActions.Any(x => !x.IsValid)) {
-                        continue;
-                    }
-
-                    PluginLog.Debug($"\tin {comboType} : {groupID} {ss[2].Trim()}");
-                    cg.Add((groupID, comboActions, comboType));
-                }
-                this.ComboManager = new ComboManager(cg);
+                this.ComboManager = ComboManager.FromString(this.combo);
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
                 return false;

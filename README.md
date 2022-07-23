@@ -43,69 +43,80 @@ Auto delay `/ac` commands to the right time.
 ```
 
 ### Config
-```jsonc
-{
-  // Always treating yourself as a member in a party list (even not exists).
-  "alwaysInParty": false,
+```yaml
+# Always treating yourself as a member in a party list (even not exists).
+alwaysInParty: true
 
-  // Auto targeting the nearest enemy when casting actions.
-  "autoTargeting": false,
-  "alwaysTargetingNearestEnemy": false,
+# Auto targeting the nearest enemy when casting actions.
+autoTargeting: true
+alwaysTargetingNearestEnemy: false
 
-  // Serial execute /ac commands in macro.
-  "actionAutoDelay": false,
+# Serial execute /ac commands in macro.
+actionAutoDelay: false
 
-  // Emulate <gtoff>
-  // Casting direcly instead of entering ground targeting mode.
-  "gtoff": [
-    "地星"
-  ],
+# Default select order for gs actions.
+# y → left <=> party member no.1 → no.8
+priority: y b a x up right down left
 
-  // Actions using gamepad selection.
-  "gs": [
-    "均衡诊断",
-    "Haima"
-  ],
+# Emulate <gtoff>
+# Casting direcly instead of entering ground targeting mode.
+gtoff:
+  - 地星
+  - 野战治疗阵
 
-  // Default select order for gs actions.
-  // y → left <=> party member no.1 → no.8
-  "priority": "y b a x up right down left",
+# Actions using gamepad selection.
+gs:
+  - 均衡诊断
+  - 白牛清汁
+  - 灵橡清汁
+  - 输血
 
-  // <combo type> : <combo chain> : <slot action>
-  // m:  Manual
-  // l:  Linear
-  // s:  Strict
-  // lb: LinearBlocked
-  // sb: StrictBlocked
-  // o:  Ochain
-  "combo": [
-    "o : 抽卡! -> 出卡? : 出卡",
-    "o : 小奥秘卡! -> 出王冠卡? : 出王冠卡",
-    "o : 龙神附体! -> 星极超流 -> 龙神迸发 ->
-         火神召唤! -> 宝石耀{2}? ->
-         风神召唤! -> 宝石耀{4}? ->
-         土神召唤! -> 宝石耀{4}? ->
-         : 宝石耀",
-    "o : 龙神附体! -> 星极超流 -> 龙神迸发 ->
-         火神召唤! -> 宝石辉{2}? ->
-         风神召唤! -> 宝石辉{4}? ->
-         土神召唤! -> 宝石辉{4}? ->
-         : 宝石辉",
-  ],
+  - 吉星相位
+  - 先天禀赋
+  - 星位合图
+  - 天星交错
+  - 出卡
+  - 擢升
 
-  // Key: Action / ActionID
-  // Val: Select order string, will use `priority` value in config if val is "" or "default".
-  "rules": {
-    // Use a different select order for specific action.
-    "Aspected Benefic": "y a x b up down left right",
+  - 生命活性法
+  - 生命回生法
+  - 深谋远虑之策
+  - 以太契约
 
-    // Could add other actions which this plugin are not built-in.
-    // ActionID: 16556 → "Celestial Intersection"
-    "16556": "default",
-  }
-}
+# <combo type> : <combo chain> : <slot action>
+# m:  Manual
+# l:  Linear
+# s:  Strict
+# lb: LinearBlocked
+# sb: StrictBlocked
+# o:  Ochain
+combo: |-
+  o 出卡    : 抽卡! -> 出卡? : 出卡
+  o 出王冠卡: 小奥秘卡! -> 出王冠卡? : 出王冠卡
+  o 宝石辉  : 以太蓄能! -> 星极超流 -> 龙神迸发 ->
+              绿宝石召唤! -> 宝石辉{4}? ->
+              黄宝石召唤! -> 宝石辉{4}? ->
+              红宝石召唤! -> 宝石辉{2}?
+  o 宝石耀  : 以太蓄能! -> 星极超流 -> 龙神迸发 ->
+              绿宝石召唤! -> 宝石耀{4}? ->
+              黄宝石召唤! -> 宝石耀{4}? ->
+              红宝石召唤! -> 宝石耀{2}?
+  o 暴风斩  : 重劈#1 -> 凶残裂#1 -> 暴风斩#1 : 暴风斩
+  o 暴风碎  : 重劈#1 -> 凶残裂#1 -> 暴风碎#1 : 暴风碎
+  o 超压斧  : 超压斧#1 -> 秘银暴风#1 : 超压斧
+  o 狂暴    : 狂暴 -> 蛮荒崩裂* : 狂暴
+
+# Key: Action / ActionID
+# Val: Select order string, will use `priority` value in config if val is "" or "default".
+rules:
+  # Use a different select order for specific action.
+  Aspected Benefic: y a x b up down left right
+
+  # Could add other actions which this plugin are not built-in.
+  # ActionID: 16556 → "Celestial Intersection"
+  "16556": default
 ```
 
 ### Pre-included Actions
 
-See [Actions.cs](GamepadTweaks/Actions.cs), which is very incomplement. Full Actions could be seen at [Actions.csv](https://github.com/xivapi/ffxiv-datamining/csv/Action.csv) for XivGlobal or [Actions.CN.csv](https://github.com/thewakingsands/ffxiv-datamining-cn/Action.csv) for XivCN.
+See [assets/Actions.json](assets/Actions.json), full Actions could be seen at [Actions.csv](https://github.com/xivapi/ffxiv-datamining/csv/Action.csv) for XivGlobal or [Actions.CN.csv](https://github.com/thewakingsands/ffxiv-datamining-cn/Action.csv) for XivCN.

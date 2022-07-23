@@ -1,5 +1,6 @@
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Logging;
+using System.Text.RegularExpressions;
 
 
 namespace GamepadTweaks
@@ -78,7 +79,7 @@ namespace GamepadTweaks
         public uint LastActionID = 0;
         public int LastIndex = 0;
 
-        public Actions Actions = Plugin.Actions;
+        public static Actions Actions = Plugin.Actions;
 
         private SemaphoreSlim actionLock = new SemaphoreSlim(1, 1);
         private SemaphoreSlim actionLockHighPriority = new SemaphoreSlim(1, 1);
@@ -109,6 +110,92 @@ namespace GamepadTweaks
                     Type = ComboType.Linear; break;
             }
             ComboActions = actions;
+        }
+
+        public static ComboGroup? FromString(string combo)
+        {
+            if (String.IsNullOrEmpty(combo)) return null;
+
+            var ss = combo.Split(":");
+            var sh = ss[0].Trim().Split(" ", 2);
+            var comboType = sh[0].Trim();
+            var comboGroup = sh[1].Trim();
+            var groupID = Actions.ID(comboGroup);
+
+            PluginLog.Debug($"\tin {comboType} : {groupID} {comboGroup}");
+
+            var comboActions = ss[1].Split("->").Where(a => !String.IsNullOrEmpty(a) && !String.IsNullOrWhiteSpace(a)).Select(a => {
+                var pattern = new Regex(@"(?<action>[\w\s]+\w)(?<type>[\d\,\{\}\*\!\?#]+)?", RegexOptions.Compiled);
+                var match = pattern.Match(a.Trim());
+                var action = match.Groups.ContainsKey("action") ? match.Groups["action"].ToString().Trim() : "";
+                var type = match.Groups.ContainsKey("type") ? match.Groups["type"].ToString().Trim() : "";
+
+                var comboActionType = ComboActionType.Single;
+                int minCount = 1;
+                int maxCount = 1;
+                var comboID = 0;
+                switch (type)
+                {
+                    case "":
+                        comboActionType = ComboActionType.Single; break;
+                    case "?":
+                        comboActionType = ComboActionType.SingleSkipable; break;
+                    case "*":
+                        comboActionType = ComboActionType.Skipable; break;
+                    case "!":
+                        comboActionType = ComboActionType.Blocking; break;
+                    default:
+                        if (type.StartsWith("{")) {
+                            comboActionType = ComboActionType.Multi;
+                            var tpattern = new Regex(@"(?<mc>\d+)\s*(,\s*(?<uc>\d+))?\s*}(?<sk>[?])?", RegexOptions.Compiled);
+                            var tmatch = tpattern.Match(type);
+                            minCount = Int32.Parse(tmatch.Groups["mc"].ToString());
+                            if (tmatch.Groups.ContainsKey("uc")) {
+                                var ucs = tmatch.Groups["uc"].ToString().Trim();
+                                maxCount = !String.IsNullOrEmpty(ucs) ? Int32.Parse(ucs) : minCount;
+                            } else {
+                                maxCount = minCount;
+                            }
+                            if (tmatch.Groups.ContainsKey("sk")) {
+                                var sks = tmatch.Groups["sk"].ToString().Trim();
+                                if (sks == "?")
+                                    comboActionType = ComboActionType.MultiSkipable;
+                            }
+                        } else if (type.StartsWith("#")) {
+                            comboActionType = ComboActionType.Group;
+                            var gs = type.Substring(1);
+                            if (String.IsNullOrEmpty(gs)) {
+                                comboID = 1;
+                            } else {
+                                try {
+                                    comboID = Int32.Parse(type.Substring(1));
+                                } catch(Exception e) {
+                                    PluginLog.Debug($"Exception: {e}");
+                                    comboID = 1;
+                                }
+                            }
+                        }
+                        break;
+                }
+                var id = Actions.ID(action.Trim());
+
+                PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} subgroup: {comboID}");
+
+                return new ComboAction() {
+                    ID = id,
+                    Type = comboActionType,
+                    MinimumCount = minCount,
+                    MaximumCount = maxCount,
+                    Group = comboID,
+                };
+            }).ToList();
+
+            // 如果有不合法的action, 此链作废
+            if (groupID == 0 || comboActions.Any(x => !x.IsValid)) {
+                return null;
+            }
+
+            return new ComboGroup(groupID, comboActions, comboType);
         }
 
         public uint Current(uint lastComboAction = 0, float comboTimer = 0f)
@@ -461,6 +548,38 @@ namespace GamepadTweaks
                 var combo = new ComboGroup(groupID, comboActions, comboType);
                 ComboGroups.Add(groupID, combo);
             }
+        }
+
+        public static ComboManager FromString(string combo)
+        {
+            var cm = new ComboManager();
+
+            var nodeStr = String.Empty;
+            var lines = combo.Split("\n").Select(x => x.Trim()).Where(x => !String.IsNullOrEmpty(x)).ToList();
+            foreach (var line in lines) {
+                if (line.StartsWith("#") || line.StartsWith("//")) {
+                    continue;
+                }
+
+                if (line.Contains(":")) {
+                    var cg = ComboGroup.FromString(nodeStr);
+                    if (cg is not null) {
+                        cm.ComboGroups.Add(cg.GroupID, cg);
+                    }
+                    nodeStr = line;
+                } else {
+                    nodeStr += line;
+                }
+            }
+
+            if (!String.IsNullOrEmpty(nodeStr)) {
+                var cg = ComboGroup.FromString(nodeStr);
+                if (cg is not null) {
+                    cm.ComboGroups.Add(cg.GroupID, cg);
+                }
+            }
+
+            return cm;
         }
 
         public void StateReset(uint groupID = 0)
