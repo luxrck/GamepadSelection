@@ -58,6 +58,7 @@ namespace GamepadTweaks
         public static string FontFile = Path.Combine(Root, "sarasa-fixed-sc-regular.subset.ttf");
         public static string GlyphRangesFile = Path.Combine(Root, "chars.txt");
         public static string ActionFile = Path.Combine(Root, "Actions.json");
+        public static string AliasFile = Path.Combine(Root, "alias.txt");
         public static string ConfigFile = Plugin.PluginInterface.ConfigFile.ToString();
 
         internal string content = String.Empty;
@@ -243,7 +244,7 @@ namespace GamepadTweaks
                         }
                         var id = Actions.ID(action.Trim());
 
-                        // PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} subgroup: {comboID}");
+                        PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} subgroup: {comboID}");
 
                         return new ComboAction() {
                             ID = id,

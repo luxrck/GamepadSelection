@@ -110,12 +110,12 @@ namespace GamepadTweaks
                     while (current < total) {
                         await Task.Delay(delay);
                         if (me.CurrentCastTime == 0 || me.TotalCastTime == 0) break;
-                        if (me.CurrentCastTime >= me.TotalCastTime - eps / 100) break;
+                        if (me.CurrentCastTime >= me.TotalCastTime - eps / 1000) break;
                         if (!me.IsCasting) break;
                         current += delay;
                     }
                     var after = DateTime.Now;
-                    PluginLog.Debug($"[Casting] action: {Plugin.Actions.Name(ID)}, start: {start}, total: {total} {after - before}");
+                    PluginLog.Debug($"[Casting] action: {Plugin.Actions.Name(ID)}, start: {start}, total: {total} {(after - before).TotalMilliseconds}");
                     if ((after - before).TotalMilliseconds >= (total - start - eps)) Finished = true;
                     return Finished;
                 } else {
@@ -205,30 +205,6 @@ namespace GamepadTweaks
 
     public class Actions
     {
-        public string AliasInfo = @"
-            出卡        <- { 太阳神之衡, 放浪神之箭, 战争神之枪, 世界树之干, 河流神之瓶, 建筑神之塔 }
-            出王冠卡    <- { 王冠之领主, 王冠之贵妇 }
-            迸裂        <- 三重灾祸
-                        <- 星极核爆
-                        <- 炼狱之炎
-            毁荡        <- 毁灭(召) <- 毁坏(召)
-                        <- 星极脉冲
-                        <- 灵泉之炎
-            星极超流    <- 死星核爆
-                        <- 苏生之炎
-            以太蓄能    <- 龙神附体 <- 龙神召唤
-                        <- 不死鸟召唤
-            龙神迸发    <- 不死鸟迸发
-            宝石耀      <- 红宝石毁灭 <- 红宝石毁坏 <- 红宝石毁荡 <- 红宝石之仪
-                        <- 绿宝石毁灭 <- 绿宝石毁坏 <- 绿宝石毁荡 <- 绿宝石之仪
-                        <- 黄宝石毁灭 <- 黄宝石毁坏 <- 黄宝石毁荡 <- 黄宝石之仪
-            宝石辉      <- 红宝石迸裂 <- 红宝石灾祸
-                        <- 黄宝石迸裂 <- 黄宝石灾祸
-                        <- 绿宝石迸裂 <- 绿宝石灾祸
-            红宝石召唤  <- 火神召唤
-            绿宝石召唤  <- 风神召唤
-            黄宝石召唤  <- 土神召唤";
-
         private Dictionary<uint, uint> AliasMap = new Dictionary<uint, uint>();
         private Dictionary<uint, ActionInfo> InfoMap = new Dictionary<uint, ActionInfo>();
         private Dictionary<string, Dictionary<string, uint>> NameMap = new Dictionary<string, Dictionary<string, uint>>();
@@ -259,8 +235,9 @@ namespace GamepadTweaks
                     }
                 }
 
-                BuildAliasInfo();
-                // TestAliasInfo();
+                var alias = File.ReadAllText(Configuration.AliasFile);
+                BuildAliasInfo(alias);
+                TestAliasInfo();
 
                 PluginLog.Debug($"Load Action Info Data: {Configuration.ActionFile}");
             } catch(Exception e) {
@@ -268,11 +245,16 @@ namespace GamepadTweaks
             }
         }
 
-        private void BuildAliasInfo()
+        private void BuildAliasInfo(string alias)
         {
             var previousRoot = 0u;
-            var lines = AliasInfo.Split("\n").Select(x => x.Trim()).Where(x => !String.IsNullOrEmpty(x)).ToList();
+            var lines = alias.Split("\n").Select(x => x.Trim()).Where(x => !String.IsNullOrEmpty(x)).ToList();
             foreach (var line in lines) {
+
+                if (line.StartsWith("#") || line.StartsWith("//")) {
+                    continue;
+                }
+
                 var components = line.Split("<-", 2);
                 var root = components[0].Trim();
                 var children = components[1].Trim();
