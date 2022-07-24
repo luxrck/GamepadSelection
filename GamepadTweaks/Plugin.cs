@@ -15,6 +15,7 @@ using XivCommon;
 using System.Runtime.InteropServices;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 
 using GamepadTweaks.Attributes;
 
@@ -95,7 +96,8 @@ namespace GamepadTweaks
         }
 
         [Command("/gt")]
-        [HelpMessage(@"Open setting panel.
+        [HelpMessage(@"Open config window.
+/gt config → Open config file with external file editor.
 /gt on/off → Enable/Disable this plugin.
 /gt info → Show gt info.
 /gt add <action> [<selectOrder>] → Add specific <action> in monitor.
@@ -116,6 +118,15 @@ namespace GamepadTweaks
                 switch(argv[0])
                 {
                     case "test":
+                        return;
+                    case "config":
+                        var editor = new Process() {
+                            StartInfo = new ProcessStartInfo(Configuration.ConfigFile) {
+                                UseShellExecute = true,
+                            },
+                        };
+                        PluginLog.Debug($"Open: {Configuration.ConfigFile}");
+                        editor.Start();
                         return;
                     case "on":
                         Echo("[GamepadTweaks] Enabled.");
@@ -250,7 +261,7 @@ namespace GamepadTweaks
             // Framework.Update -= GamepadActionManager.UpdateFramework;
             GamepadActionManager.Dispose();
 
-            Config.Save();
+            Config.Dispose();
 
             PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
             WindowSystem.RemoveAllWindows();

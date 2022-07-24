@@ -244,7 +244,7 @@ namespace GamepadTweaks
                 PluginLog.Debug($"Load Action Alias Data: {Configuration.AliasFile}");
                 var alias = File.ReadAllText(Configuration.AliasFile);
                 BuildAliasInfo(alias);
-                TestAliasInfo();
+                // TestAliasInfo();
 
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");

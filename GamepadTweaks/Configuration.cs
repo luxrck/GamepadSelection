@@ -4,6 +4,7 @@ using Dalamud.Plugin;
 using Newtonsoft.Json;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -57,18 +58,21 @@ namespace GamepadTweaks
         private Actions Actions = Plugin.Actions;
         private ComboManager ComboManager = new GamepadTweaks.ComboManager();
 
-        public static string Root = Plugin.PluginInterface.AssemblyLocation.DirectoryName ?? String.Empty;
-        public static string FontFile = Path.Combine(Root, "sarasa-fixed-sc-regular.subset.ttf");
-        public static string GlyphRangesFile = Path.Combine(Root, "chars.txt");
-        public static string ActionFile = Path.Combine(Root, "Actions.json");
-        public static string AliasFile = Path.Combine(Root, "alias.txt");
-        public static string ConfigFile = Plugin.PluginInterface.ConfigFile.ToString();
+        public static string Root => Plugin.PluginInterface.AssemblyLocation.DirectoryName ?? String.Empty;
+        public static string FontFile => Path.Combine(Root, "sarasa-fixed-sc-regular.subset.ttf");
+        public static string GlyphRangesFile => Path.Combine(Root, "chars.txt");
+        public static string ActionFile => Path.Combine(Root, "Actions.json");
+        public static string AliasFile => Path.Combine(Root, "alias.txt");
+        public static string ConfigName => Path.GetFileNameWithoutExtension(Plugin.PluginInterface.ConfigFile.Name) + ".yaml";
+        public static string ConfigFile => Path.Combine(Plugin.PluginInterface.ConfigFile.DirectoryName ?? String.Empty, ConfigName);
 
         internal string content = String.Empty;
 
         private HashSet<uint> gsActions = new HashSet<uint>();
         private HashSet<uint> gtoffActions = new HashSet<uint>();
         private Dictionary<uint, string> userActions = new Dictionary<uint, string>();
+
+        private FileSystemWatcher watcher = null!;
 
         // public Configuration()
         // {
@@ -81,23 +85,22 @@ namespace GamepadTweaks
 
         public static Configuration Load()
         {
-            Configuration? config = null;
+            Configuration config = new Configuration();
 
             try {
-                var content = File.ReadAllText(Plugin.PluginInterface.ConfigFile.ToString());
-                var deserializer = new DeserializerBuilder()
-                    .IgnoreUnmatchedProperties()
-                    .WithNamingConvention(UnderscoredNamingConvention.Instance)
-                    .Build();
-                config = deserializer.Deserialize<Configuration>(content);
-                // config = JsonConvert.DeserializeObject<Configuration>(content) ?? new Configuration();
-                config.content = content;
-                config.UpdateActions();
+                config.UpdateFromConfigFile();
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
-                config = new Configuration();
                 config.Update();
             }
+
+            config.watcher = new FileSystemWatcher(Path.GetDirectoryName(ConfigFile) ?? String.Empty) {
+                Filter = ConfigName,
+                NotifyFilter = NotifyFilters.LastWrite,
+                EnableRaisingEvents = true,
+            };
+
+            config.watcher.Changed += config.OnConfigFileChanged;
 
             return config;
         }
@@ -114,6 +117,46 @@ namespace GamepadTweaks
         public uint CurrentComboAction(uint groupID, uint lastComboAction = 0, float comboTimer = 0f) => this.ComboManager.Current(groupID, lastComboAction, comboTimer);
         public void ResetComboState(uint groupID) => this.ComboManager.StateReset(groupID);
         public async Task<bool> UpdateComboState(GameAction a, bool succeed = true) => await this.ComboManager.StateUpdate(a, succeed);
+
+        public bool UpdateFromConfigFile()
+        {
+            try {
+                var  content = String.Empty;
+                using (var fs = new FileStream(ConfigFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var stream = new StreamReader(fs))
+                {
+                    content = stream.ReadToEnd();
+                }
+
+                if (String.IsNullOrEmpty(content) || this.content == content) return false;
+
+                var deserializer = new DeserializerBuilder()
+                    .IgnoreUnmatchedProperties()
+                    .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                    .Build();
+
+                var config = deserializer.Deserialize<Configuration>(content);
+
+                if (config is null) return false;
+
+                this.alwaysInParty = config.alwaysInParty;
+                this.autoTargeting = config.autoTargeting;
+                this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
+                this.actionSchedule = config.actionSchedule;
+                this.actionRetry = config.actionRetry;
+                this.priority = config.priority;
+                this.gs = config.gs;
+                this.gtoff = config.gtoff;
+                this.combo = config.combo;
+                this.rules = config.rules;
+
+                this.content = content;
+
+                return this.UpdateActions();
+            } catch {
+                return false;
+            }
+        }
 
         public bool Update(string content = "")
         {
@@ -201,6 +244,20 @@ namespace GamepadTweaks
             }
 
             return true;
+        }
+
+        public void OnConfigFileChanged(object s, FileSystemEventArgs e)
+        {
+            if (e.ChangeType == WatcherChangeTypes.Changed) {
+                var suc = this.UpdateFromConfigFile();
+                PluginLog.Debug($"Config updateed? {suc}");
+            }
+        }
+
+        public void Dispose()
+        {
+            this.watcher.Changed -= OnConfigFileChanged;
+            Save();
         }
 
         public bool Save()

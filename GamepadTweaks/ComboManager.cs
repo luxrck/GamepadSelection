@@ -122,7 +122,7 @@ namespace GamepadTweaks
             var comboGroup = sh[1].Trim();
             var groupID = Actions.ID(comboGroup);
 
-            PluginLog.Debug($"\tin {comboType} : {groupID} {comboGroup}");
+            // PluginLog.Debug($"\tin {comboType} : {groupID} {comboGroup}");
 
             var comboActions = ss[1].Split("->").Where(a => !String.IsNullOrEmpty(a) && !String.IsNullOrWhiteSpace(a)).Select(a => {
                 var pattern = new Regex(@"(?<action>[\w\s]+\w)(?<type>[\d\,\{\}\*\!\?#]+)?", RegexOptions.Compiled);
@@ -179,7 +179,7 @@ namespace GamepadTweaks
                 }
                 var id = Actions.ID(action.Trim());
 
-                PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} subgroup: {comboID}");
+                // PluginLog.Debug($"ComboAction: {id} {action.Trim()} {comboActionType} {minCount} {maxCount} subgroup: {comboID}");
 
                 return new ComboAction() {
                     ID = id,
