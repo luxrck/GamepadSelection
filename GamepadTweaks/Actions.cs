@@ -101,6 +101,9 @@ namespace GamepadTweaks
                     var total = (int)(me.TotalCastTime * 1000);
 
                     var delay = 10;
+
+                    // 实际上最后四分之一个GCD内完成casting时,技能都会生效.
+                    // 设置一个误差, 让处理不那么严格.
                     var eps = 200;
 
                     var current = start;
@@ -112,7 +115,7 @@ namespace GamepadTweaks
                     while (current < total) {
                         await Task.Delay(delay);
                         if (me.CurrentCastTime == 0 || me.TotalCastTime == 0) break;
-                        if (me.CurrentCastTime >= me.TotalCastTime - eps / 1000) break;
+                        if (me.CurrentCastTime >= me.TotalCastTime) break;
                         if (!me.IsCasting) break;
                         current += delay;
                     }

@@ -45,16 +45,16 @@ Auto delay `/ac` commands to the right time.
 ### Config
 ```yaml
 # Always treating yourself as a member in a party list (even not exists).
-alwaysInParty: true
+always_in_party: true
 
 # Auto targeting the nearest enemy when casting actions.
-autoTargeting: true
-alwaysTargetingNearestEnemy: false
+auto_targeting: true
+always_targeting_nearest_enemy: false
 
 # Serial execute /ac commands in macro.
 # none, preemptive, non-preemptive
-actionSchedule: non-preemptive
-actionRetry: 1
+action_schedule: non-preemptive
+action_retry: 1
 
 # Default select order for gs actions.
 # y → left <=> party member no.1 → no.8
@@ -93,20 +93,22 @@ gs:
 # sb: StrictBlocked
 # o:  Ochain
 combo: |-
-  o 出卡    : 抽卡! -> 出卡? : 出卡
-  o 出王冠卡: 小奥秘卡! -> 出王冠卡? : 出王冠卡
-  o 宝石辉  : 以太蓄能! -> 星极超流 -> 龙神迸发 ->
-              绿宝石召唤! -> 宝石辉{4}? ->
-              黄宝石召唤! -> 宝石辉{4}? ->
-              红宝石召唤! -> 宝石辉{2}?
-  o 宝石耀  : 以太蓄能! -> 星极超流 -> 龙神迸发 ->
-              绿宝石召唤! -> 宝石耀{4}? ->
-              黄宝石召唤! -> 宝石耀{4}? ->
-              红宝石召唤! -> 宝石耀{2}?
-  o 暴风斩  : 重劈#1 -> 凶残裂#1 -> 暴风斩#1 : 暴风斩
-  o 暴风碎  : 重劈#1 -> 凶残裂#1 -> 暴风碎#1 : 暴风碎
-  o 超压斧  : 超压斧#1 -> 秘银暴风#1 : 超压斧
-  o 狂暴    : 狂暴 -> 蛮荒崩裂* : 狂暴
+  o 出卡        : 抽卡! -> 出卡? : 出卡
+  o 出王冠卡    : 小奥秘卡! -> 出王冠卡? : 出王冠卡
+
+  o 暴风斩      : 重劈#1 -> 凶残裂#1 -> 暴风斩#1
+  o 暴风碎      : 重劈#1 -> 凶残裂#1 -> 暴风碎#1
+  o 超压斧      : 超压斧#1 -> 秘银暴风#1
+  o 原初的解放  : 原初的解放 -> 蛮荒崩裂*
+
+  o 宝石辉      : 以太蓄能! -> 星极超流 -> 龙神迸发 ->
+                  绿宝石召唤! -> 宝石辉{4}? ->
+                  黄宝石召唤! -> 宝石辉{4}? ->
+                  红宝石召唤! -> 宝石辉{2}?
+  o 宝石耀      : 以太蓄能! -> 星极超流 -> 龙神迸发 ->
+                  绿宝石召唤! -> 宝石耀{4}? ->
+                  黄宝石召唤! -> 宝石耀{4}? ->
+                  红宝石召唤! -> 宝石耀{2}?
 
 # Key: Action / ActionID
 # Val: Select order string, will use `priority` value in config if val is "" or "default".

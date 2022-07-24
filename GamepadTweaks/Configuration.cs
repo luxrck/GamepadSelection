@@ -87,7 +87,7 @@ namespace GamepadTweaks
                 var content = File.ReadAllText(Plugin.PluginInterface.ConfigFile.ToString());
                 var deserializer = new DeserializerBuilder()
                     .IgnoreUnmatchedProperties()
-                    .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                    .WithNamingConvention(UnderscoredNamingConvention.Instance)
                     .Build();
                 config = deserializer.Deserialize<Configuration>(content);
                 // config = JsonConvert.DeserializeObject<Configuration>(content) ?? new Configuration();
@@ -121,13 +121,13 @@ namespace GamepadTweaks
                 if (String.IsNullOrEmpty(content)) {
                     var serializer = new SerializerBuilder()
                         .IgnoreFields()
-                        .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                        .WithNamingConvention(UnderscoredNamingConvention.Instance)
                         .Build();
                     this.content = serializer.Serialize(this);
                 } else {
                     var deserializer = new DeserializerBuilder()
                         .IgnoreUnmatchedProperties()
-                        .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                        .WithNamingConvention(UnderscoredNamingConvention.Instance)
                         .Build();
 
                     var config = deserializer.Deserialize<Configuration>(content);

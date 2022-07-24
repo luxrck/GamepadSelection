@@ -329,7 +329,7 @@ namespace GamepadTweaks
                         // Auto-targeting only for normal actions.
                         // default targetID == 3758096384u == 0xe0000000
                         // 只有在没选中队友时才能选中最近的敌人
-                        if (a.IsTargetingPartyMember) {
+                        if (!a.IsTargetingPartyMember) {
                             target = Config.alwaysTargetingNearestEnemy ? NearestTarget() : softTarget ?? target ?? (Config.autoTargeting ? NearestTarget() : null);
                             if (target is not null)
                                 targetedActorID = target.ObjectId;
