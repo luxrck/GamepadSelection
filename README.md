@@ -2,8 +2,6 @@
 
 [![Build](https://img.shields.io/github/workflow/status/luxrck/GamepadTweaks/Build?style=for-the-badge)](https://github.com/luxrck/GamepadTweaks/blob/master/.github/workflows/build.yml)
 
-❗: This plugin is under heavy development now and may contains many potential bugs, so use at your own risk.
-
 ##### Gamepad Selection
 Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.
 
@@ -93,8 +91,8 @@ gs:
 # sb: StrictBlocked
 # o:  Ochain
 combo: |-
-  o 出卡        : 抽卡! -> 出卡? : 出卡
-  o 出王冠卡    : 小奥秘卡! -> 出王冠卡? : 出王冠卡
+  o 出卡        : 抽卡! -> 出卡?
+  o 出王冠卡    : 小奥秘卡! -> 出王冠卡?
 
   o 暴风斩      : 重劈#1 -> 凶残裂#1 -> 暴风斩#1
   o 暴风碎      : 重劈#1 -> 凶残裂#1 -> 暴风碎#1
