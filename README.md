@@ -47,8 +47,8 @@ Auto delay `/ac` commands to the right time.
 always_in_party: true
 
 # Auto targeting the nearest enemy when casting actions.
-auto_targeting: true
-always_targeting_nearest_enemy: false
+# none, auto, nearest, least-enmity
+targeting: auto
 
 # Serial execute /ac commands in macro.
 # none, preemptive, non-preemptive

@@ -183,7 +183,7 @@ namespace GamepadTweaks
         public bool CanTargetSelf;
         public bool CanTargetParty;
         public bool CanTargetFriendly;
-        public bool CanTargetHostil;
+        public bool CanTargetHostile;
         public bool TargetArea;
         public bool CanTargetDea;
         public int CastType;

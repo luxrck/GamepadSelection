@@ -1,6 +1,7 @@
 using Dalamud.Game;
 using Dalamud.Game.ClientState;
 using Dalamud.Game.ClientState.GamePad;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.ClientState.Objects.Enums;
@@ -23,6 +24,14 @@ namespace GamepadTweaks
         public string Name = String.Empty;
         public uint ID;
         public uint JobID;
+    }
+
+    // https://github.com/SheepGoMeh/VisibilityPlugin/blob/master/Visibility/Enumerations.cs
+    public enum InvisibleFlags : int
+    {
+        Model = 1 << 1,
+        Nameplate = 1 << 11,
+        Invisible =  Model | Nameplate,
     }
 
     public enum GamepadActionManagerState : int
@@ -89,6 +98,7 @@ namespace GamepadTweaks
         private PartyList PartyList = Plugin.PartyList;
         private GameGui GameGui = Plugin.GameGui;
         private ClientState ClientState = Plugin.ClientState;
+        private Condition Condition = Plugin.Condition;
         private ObjectTable Objects = Plugin.Objects;
         private TargetManager TargetManager = Plugin.TargetManager;
 
@@ -122,6 +132,14 @@ namespace GamepadTweaks
             // if (!me.StatusFlags.HasFlag(StatusFlags.InCombat) && !me.StatusFlags.HasFlag(StatusFlags.WeaponOut)) {
             //     Plugin.Config.ResetComboState(0);
             // }
+            if (!Condition[ConditionFlag.BoundByDuty] &&
+                !Condition[ConditionFlag.InCombat] &&
+                !Condition[ConditionFlag.InDeepDungeon] &&
+                !Condition[ConditionFlag.InDuelingArea])
+            {
+                Config.ResetComboState(0);
+            }
+
 
             // macro
             Task.Run(async () => {
@@ -329,8 +347,15 @@ namespace GamepadTweaks
                         // Auto-targeting only for normal actions.
                         // default targetID == 3758096384u == 0xe0000000
                         // 只有在没选中队友时才能选中最近的敌人
-                        if (!a.IsTargetingPartyMember) {
-                            target = Config.alwaysTargetingNearestEnemy ? NearestTarget() : softTarget ?? target ?? (Config.autoTargeting ? NearestTarget() : null);
+                        if (!a.IsTargetingPartyMember && (a.Info?.CanTargetHostile ?? false)) {
+                            if (Config.targeting == "auto") {
+                                target = softTarget ?? target ?? NearestTarget(a);
+                            } else if (Config.targeting == "nearest") {
+                                target = NearestTarget(a);
+                            } else if (Config.targeting == "least-enmity") {
+                                // 有可能选到友方战斗NPC
+                                target = NearestTargetWithLeastEnmity(a);
+                            }
                             if (target is not null)
                                 targetedActorID = target.ObjectId;
                         }
@@ -345,6 +370,10 @@ namespace GamepadTweaks
                         //  3. Action not in monitor (any action could be a combo action)
 
                         ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+
+                        if (!ret && Config.targeting == "least-enmity") {
+                            ret = this.useActionHook.Original(actionManager, actionType, adjustedID, NearestTarget(a)?.ObjectId ?? Configuration.DefaultInvalidGameObjectID, param, useType, pvp, a8);
+                        }
 
                         this.state = GamepadActionManagerState.ActionExecuted;
                     }
@@ -675,13 +704,6 @@ namespace GamepadTweaks
             return me.ToList();
         }
 
-        // Could choose wrong target cause some game objects are invisible.
-        private GameObject? NearestTarget()
-        {
-            Plugin.Send("/tenemy");
-            return TargetManager.Target;
-        }
-
         private async Task<int> ActionDelay(GameAction a)
         {
             if (a.ID == LastAction.ID && Config.IsGtoffAction(a.ID) && !LastAction.HasTarget && !a.HasTarget) {
@@ -753,52 +775,57 @@ namespace GamepadTweaks
             return ret;
         }
 
-        // private GameObject? NearestTarget(BattleNpcSubKind type = BattleNpcSubKind.Enemy)
-        // {
-        //     var me = ClientState.LocalPlayer;
+        // Could choose wrong target cause some game objects are invisible.
+        private GameObject? NearestTarget(GameAction a)
+        {
+            Plugin.Send("/tenemy");
+            return TargetManager.Target;
+        }
 
-        //     if (me is null)
-        //         return null;
+        private GameObject? NearestTargetWithLeastEnmity(GameAction a, BattleNpcSubKind type = BattleNpcSubKind.Enemy)
+        {
+            var me = Plugin.Player;
 
-        //     var pm = me.Position;
+            if (me is null) return null;
 
-        //     GameObject? o = null;
-        //     var md = Double.PositiveInfinity;
-        //     foreach (var x in Objects) {
-        //         // if (x.ObjectKind == ObjectKind.BattleNpc) {
-        //         //     unsafe {
-        //         //         var St = (FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)x.Address;
-        //         //         PluginLog.Debug($"{x.IsValid()} {x.ObjectKind} {x.SubKind} {x.ObjectId} {x.OwnerId} {x.Name.ToString()} {((BattleNpc)x).CurrentHp}, {St->RenderFlags}");
-        //         //     }
-        //         // }
-        //         if (!x.IsValid() ||
-        //             x.ObjectKind != ObjectKind.BattleNpc ||
-        //             x.SubKind != (byte)type ||
-        //             x.ObjectId == me.ObjectId)
-        //             continue;
-        //         if (((BattleNpc)x).CurrentHp <= 0)
-        //             continue;
-        //         var px = x.Position;
-        //         var d = Math.Pow(px.X - pm.X, 2) + Math.Pow(px.Y - pm.Y, 2) + Math.Pow(px.Z - pm.Z, 2);
-        //         if (d < md) {
-        //             md = d;
-        //             o = x;
-        //         }
-        //     }
+            var actionRange = a.Info?.Range ?? 0;
 
-        //     // GameObject o = Objects.ToList().Min(x => {
-        //     //     if (x.ObjectId == me.ObjectId)
-        //     //         return Double.PositiveInfinity;
-        //     //     var px = x.Position;
-        //     //     return Math.Pow(px.X - pm.X, 2) + Math.Pow(px.Y - pm.Y, 2) + Math.Pow(px.Z - pm.Z, 2);
-        //     // });
-        //     if (o is not null) {
-        //         TargetManager.SetTarget(o);
-        //         PluginLog.Debug($"Nearest Target: {o.ObjectId} {o.Name.ToString()}, SubKind: {type}");
-        //     }
+            if (actionRange == 0) return NearestTarget(a);
 
-        //     return o;
-        // }
+            GameObject? o = null;
+            var md = Double.PositiveInfinity;
+            foreach (var x in Objects) {
+                if (x.ObjectId == me.ObjectId) continue;
+                unsafe {
+                    var g = (FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject*)x.Address;
+                    // TODO: 不出现在小队列表里的战斗npc的SubKind会被识别成Enemy, 目前无法区分
+                    if (!g->GetIsTargetable() ||
+                        !x.IsValid() ||
+                        String.IsNullOrEmpty(x.Name.ToString().Trim()) ||
+                        x.ObjectKind != ObjectKind.BattleNpc ||
+                        x.SubKind != (byte)type ||
+                        x.TargetObjectId == me.ObjectId)    // <---
+                        continue;
+                    if (((BattleNpc)x).CurrentHp <= 0)
+                        continue;
+                    var d = Math.Sqrt(Math.Pow(x.Position.X - me.Position.X, 2) + Math.Pow(x.Position.Y - me.Position.Y, 2) + Math.Pow(x.Position.Z - me.Position.Z, 2));
+                    // PluginLog.Debug($"{x.IsValid()} {x.ObjectKind} {g->ObjectID} {x.Name.ToString()} {x.TargetObjectId} {me.ObjectId} {d}");
+                    if ((int)d > actionRange) continue;
+                    if (d < md) {
+                        md = d;
+                        o = x;
+                    }
+                }
+            }
+
+            if (o is not null) {
+                TargetManager.SetTarget(o);
+                PluginLog.Debug($"Nearest target with least enmity: {o.ObjectId} {o.Name.ToString()}, SubKind: {type}");
+                return TargetManager.Target;
+            } else {
+                return NearestTarget(a);
+            }
+        }
 
         public void Enable()
         {

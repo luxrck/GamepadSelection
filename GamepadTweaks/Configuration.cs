@@ -10,7 +10,6 @@ using System.Text.RegularExpressions;
 
 namespace GamepadTweaks
 {
-    [JsonObject(MemberSerialization.OptIn)]
     public class Configuration : IPluginConfiguration
     {
         public static uint DefaultInvalidGameObjectID = 3758096384U;
@@ -30,10 +29,11 @@ namespace GamepadTweaks
         #region Saved configuration values
         [YamlMember]
         public bool alwaysInParty { get; set; } = false;
-        [YamlMember]
-        public bool autoTargeting { get; set; } = false;
-        [YamlMember]
-        public bool alwaysTargetingNearestEnemy { get; set; } = false;
+        // [YamlMember]
+        // public bool autoTargeting { get; set; } = false;
+        // [YamlMember]
+        // public bool alwaysTargetingNearestEnemy { get; set; } = false;
+        public string targeting { get; set; } = "auto";         // none, auto, nearest, least-enmity
         [YamlMember]
         public string actionSchedule { get; set; } = "none";    // none, preemptive, non-preemptive
         [YamlMember]
@@ -140,8 +140,9 @@ namespace GamepadTweaks
                 if (config is null) return false;
 
                 this.alwaysInParty = config.alwaysInParty;
-                this.autoTargeting = config.autoTargeting;
-                this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
+                // this.autoTargeting = config.autoTargeting;
+                // this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
+                this.targeting = config.targeting;
                 this.actionSchedule = config.actionSchedule;
                 this.actionRetry = config.actionRetry;
                 this.priority = config.priority;
@@ -179,8 +180,9 @@ namespace GamepadTweaks
                     if (config is null) return false;
 
                     this.alwaysInParty = config.alwaysInParty;
-                    this.autoTargeting = config.autoTargeting;
-                    this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
+                    // this.autoTargeting = config.autoTargeting;
+                    // this.alwaysTargetingNearestEnemy = config.alwaysTargetingNearestEnemy;
+                    this.targeting = config.targeting;
                     this.actionSchedule = config.actionSchedule;
                     this.actionRetry = config.actionRetry;
                     this.priority = config.priority;
