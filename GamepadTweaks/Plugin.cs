@@ -153,7 +153,7 @@ namespace GamepadTweaks
                         foreach(string a in Config.gs) {
                             Echo($"[D] {a}");
                         }
-                        foreach(var a in Config.rules) {
+                        foreach(var a in Config.gsRules) {
                             Echo(@$"[U] {a.Key} =>
         {a.Value}");
                         }
@@ -172,7 +172,7 @@ namespace GamepadTweaks
                             var order = match.Groups.ContainsKey("order") ? match.Groups["order"].ToString() : "";
 
                             if (order != "") {
-                                Config.rules.TryAdd(action, order);
+                                Config.gsRules.TryAdd(action, order);
                             } else {
                                 if (!Config.gs.Contains(action)) {
                                     Config.gs.Add(action);
@@ -189,7 +189,7 @@ namespace GamepadTweaks
                         try {
                             var action = argv[1];
                             Config.gs.Remove(action);
-                            Config.rules.Remove(action);
+                            Config.gsRules.Remove(action);
                             Echo($"[GamepadTweaks] Remove action: {action} ... [ok]");
                         } catch(Exception e) {
                             Chat.PrintError($"[GamepadTweaks] Remove action failed.");

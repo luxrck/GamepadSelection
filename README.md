@@ -84,6 +84,16 @@ gs:
   - 深谋远虑之策
   - 以太契约
 
+# Key: Action / ActionID
+# Val: Select order string, will use `priority` value in config if val is "" or "default".
+gs_rules:
+  # Use a different select order for specific action.
+  Aspected Benefic: y a x b up down left right
+
+  # Could add other actions which this plugin are not built-in.
+  # ActionID: 16556 → "Celestial Intersection"
+  "16556": default
+
 # <combo type> : <combo chain> : <slot action>
 # m:  Manual
 # l:  Linear
@@ -108,16 +118,6 @@ combo: |-
                   绿宝石召唤! -> 宝石耀{4}? ->
                   黄宝石召唤! -> 宝石耀{4}? ->
                   红宝石召唤! -> 宝石耀{2}?
-
-# Key: Action / ActionID
-# Val: Select order string, will use `priority` value in config if val is "" or "default".
-rules:
-  # Use a different select order for specific action.
-  Aspected Benefic: y a x b up down left right
-
-  # Could add other actions which this plugin are not built-in.
-  # ActionID: 16556 → "Celestial Intersection"
-  "16556": default
 ```
 
 ### Pre-included Actions

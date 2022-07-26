@@ -121,7 +121,9 @@ namespace GamepadTweaks
                     }
                     var after = DateTime.Now;
                     PluginLog.Debug($"[Casting] action: {Plugin.Actions.Name(ID)}, start: {start}, total: {total} {(after - before).TotalMilliseconds}");
-                    if ((after - before).TotalMilliseconds >= (total - start - eps)) Finished = true;
+                    var passed = (after - before).TotalMilliseconds;
+                    if (passed >= (total - start - eps)) Finished = true;
+                    await Task.Delay((int)passed - total + start + eps);
                     return Finished;
                 } else {
                     // why reach here ???
@@ -232,11 +234,11 @@ namespace GamepadTweaks
                         InfoMap[info.ID] = info;
                     }
 
-                    foreach (var lang in langs) {
-                        if (!NameMap[lang].ContainsKey(info.Name)) {
-                            NameMap[lang][info.Name] = info.ID;
+                    foreach (var name in info.Names) {
+                        if (!NameMap[name.Key].ContainsKey(name.Value)) {
+                            NameMap[name.Key][name.Value] = info.ID;
                         } else {
-                            PluginLog.Warning($"Duplicate actions: {info.Name}. action id: {NameMap[lang][info.Name]} already exists while incoming {info.ID}");
+                            PluginLog.Warning($"Duplicate actions: {info.Name}. action id: {NameMap[name.Key][name.Value]} already exists while incoming {info.ID}");
                         }
                     }
                 }

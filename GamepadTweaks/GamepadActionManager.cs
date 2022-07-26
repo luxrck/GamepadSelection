@@ -107,14 +107,17 @@ namespace GamepadTweaks
             this.LastGsAction = new GameAction();
             // this.lastTime = DateTime.Now;
 
+            // var useActionLocation = SigScanner.ScanText("E8 ?? ?? ?? ?? 3C 01 0F 85 ?? ?? ?? ?? EB 46");
+            // this.UseActionLocationHook = new Hook<UseActionLocationDelegate>(useActionLocation, this.UseActionLocationDetour);
+
             var useAction = SigScanner.ScanText("E8 ?? ?? ?? ?? EB 64 B1 01");
-            this.useActionHook = new Hook<UseActionDelegate>(useAction, this.UseActionDetour);
+            this.UseActionHook = new Hook<UseActionDelegate>(useAction, this.UseActionDetour);
 
             var getIcon = SigScanner.ScanText("E8 ?? ?? ?? ?? 8B F8 3B DF");
-            this.getIconHook = new Hook<GetIconDelegate>(getIcon, this.GetIconDetour);
+            this.GetIconHook = new Hook<GetIconDelegate>(getIcon, this.GetIconDetour);
 
             var isIconReplaceable = SigScanner.ScanText("81 F9 ?? ?? ?? ?? 7F 35");
-            this.isIconReplaceableHook = new Hook<IsIconReplaceableDelegate>(isIconReplaceable, IsIconReplaceableDetour);
+            this.IsIconReplaceableHook = new Hook<IsIconReplaceableDelegate>(isIconReplaceable, IsIconReplaceableDetour);
 
             // this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("E8 ?? ?? ?? ?? 80 7E 21 00", 0x178) - 4;
             this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("F3 0F 11 05 ?? ?? ?? ?? F3 0F 10 45 ?? E8");
@@ -183,6 +186,7 @@ namespace GamepadTweaks
                     if (ret) {
                         this.LastTime = DateTime.Now;
                         this.LastActionID = m.ID;
+                        this.LastAction = m;
                         // this.LastAction.Writer.TryWrite(m);
                     }
 
@@ -222,7 +226,14 @@ namespace GamepadTweaks
             // else if (Config.IsComboAction(adjusted) && Config.UpdateComboState(adjusted, status)) {}
         }
 
-        private Hook<UseActionDelegate> useActionHook;
+        // private Hook<UseActionLocationDelegate> UseActionLocationHook;
+        // private delegate bool UseActionLocationDelegate(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, IntPtr vectorLocation, uint param);
+        // private bool UseActionLocationDetour(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, IntPtr vectorLocation, uint param)
+        // {
+        //     return UseActionLocationHook.Original(actionManager, actionType, actionID, targetedActorID, vectorLocation, param);
+        // }
+
+        private Hook<UseActionDelegate> UseActionHook;
         private delegate bool UseActionDelegate(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8);
         private bool UseActionDetour(IntPtr actionManager, uint actionType, uint actionID, uint targetedActorID, uint param, uint useType, uint pvp, IntPtr a8)
         {
@@ -273,16 +284,16 @@ namespace GamepadTweaks
 
             // PROCEDURE
             //  1. !Spell && !Ability -> exec
-            //  2. Macro : UseAction[UseType == 2] -> LocalDelay -> am->UseAction[UseType == 2] -> exec
-            //  3. GtAct : UseAction[UseType == 0] -> Exec ?? LocalDelay -> am->UseAction[UseType == 2] -> exec
-            //  4. GsAct : UseAction[UseType == *] : In Gs -> UseAction[UseType == *] : Gs -> exec
-            //  5. Norma : UseAction[UseType == 0] -> exec
+            //  2. AcCom : UseAction[UseType == 2] -> LocalDelay -> am->UseAction[UseType == 2] -> exec
+            //  3. GtAct : UseAction[UseType == 0] -> Delay -> UseAction[UseType == 2] -> exec
+            //  4. GsAct : UseAction[UseType == *] : Entering Gs -> UseAction[UseType == *] : In Gs -> exec
+            //  5. Norma : UseAction[UseType == 0/1] -> exec
             // PRECEDURE END
 
             // Only handle Spell && Ability(?)
             if (a.Type != ActionType.Spell && a.Type != ActionType.Ability) {
                 PluginLog.Debug($"[UseAction] Not a spell. {adjustedID} {actionType}");
-                return this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+                return UseActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, 1, pvp, a8);
             }
 
             // UseType == 2: macro
@@ -290,23 +301,20 @@ namespace GamepadTweaks
             if (a.UseType == 2) {
                 // GtAction in macro should execute immediately!
                 if (Config.IsGtoffAction(a.ID)) {
-                    ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+                    ret = UseActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+                    PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, {status}, iscasting: {me.IsCasting}, casttime: {a.AdjustedCastTimeTotalMilliseconds}, action: {Plugin.Actions.Name(adjustedID)}, ID: {adjustedID}, UseType: {a.UseType}");
                     goto MainRet;
                 }
 
                 if (Config.actionSchedule != "none") {
-                    ret = this.pendingActions.Writer.TryWrite(new GameAction() {
-                                    ID = originalActionID,
-                                    TargetID = targetedActorID,
-                                    Status = ActionStatus.LocalDelay,
-                                    // DelayTo = this.CalculateDelay(adjustedID),
-                                });
+                    a.Status = ActionStatus.LocalDelay;
+                    ret = SendPendingAction(a);
 
                     PluginLog.Debug($"[UseAction] Macro local delay? {ret}");
                     return ret;
                 }
 
-                ret = this.useActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
+                ret = UseActionHook.Original(actionManager, actionType, actionID, targetedActorID, param, useType, pvp, a8);
                 goto MainRet;
             }
 
@@ -327,9 +335,9 @@ namespace GamepadTweaks
                         // am->UseActionLocation有时会出现内存访问错误, 导致游戏崩溃
                         // 因此转而采用宏来实现
                         a.Status = ActionStatus.Delay;
-                        ret = this.pendingActions.Writer.TryWrite(a);
-                        PluginLog.Debug($"[UseAction] GtoffAction delay? {ret}");
-                        return ret;
+                        SendPendingAction(a);
+                        PluginLog.Debug($"[UseAction] GtoffAction delay.");
+                        return false;
                     } else if (Config.IsGsAction(actionID) || Config.IsGsAction(adjustedID)) {
                         // if (status == ActionStatus.Ready && pmap.Any(x => x.ID == targetedActorID)) {
                         // 1. targetID不是队友, 进入GSM
@@ -338,7 +346,7 @@ namespace GamepadTweaks
                         // 4. 再次执行, 又回到这里, 需要判断到底处于何种状态(是第一步, 还是第四步)
                         //    此时Action状态为Ready, 并且targetID应该也已经变成了队友?, 所以可能不需要特殊判断
                         if (a.IsTargetingPartyMember) {
-                            ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+                            ret = UseActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
                             this.state = GamepadActionManagerState.ActionExecuted;
                         } else {
                             this.state = GamepadActionManagerState.EnteringGamepadSelection;
@@ -369,10 +377,10 @@ namespace GamepadTweaks
                         //  2. We already target a party member
                         //  3. Action not in monitor (any action could be a combo action)
 
-                        ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+                        ret = UseActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
 
                         if (!ret && Config.targeting == "least-enmity") {
-                            ret = this.useActionHook.Original(actionManager, actionType, adjustedID, NearestTarget(a)?.ObjectId ?? Configuration.DefaultInvalidGameObjectID, param, useType, pvp, a8);
+                            ret = UseActionHook.Original(actionManager, actionType, adjustedID, NearestTarget(a)?.ObjectId ?? Configuration.DefaultInvalidGameObjectID, param, useType, pvp, a8);
                         }
 
                         this.state = GamepadActionManagerState.ActionExecuted;
@@ -384,7 +392,7 @@ namespace GamepadTweaks
                     // 未满足发动条件?
                     // 未满足发动条件的GsAction直接跳过, 不进行目标选择.
                     if (status != ActionStatus.Ready && status != ActionStatus.Locking && status != ActionStatus.Pending)  {
-                        ret = this.useActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
+                        ret = UseActionHook.Original(actionManager, actionType, adjustedID, targetedActorID, param, useType, pvp, a8);
                         this.state = GamepadActionManagerState.ActionExecuted;
                         goto MainLoop;
                     }
@@ -443,7 +451,7 @@ namespace GamepadTweaks
 
                     status = Actions.ActionStatus(o.ID, o.Type, targetedActorID);
 
-                    ret = this.useActionHook.Original(actionManager, (uint)o.Type, o.ID, o.TargetID, o.param, o.UseType, o.pvp, o.a8);
+                    ret = UseActionHook.Original(actionManager, (uint)o.Type, o.ID, o.TargetID, o.param, o.UseType, o.pvp, o.a8);
                     PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, ActionID: {actionID}, AdjID: {adjustedID}, Orig: {originalActionID}, ActionType: {actionType}, TargetID: {targetedActorID}, status: {status}");
 
                     this.savedButtonsPressed = 0;
@@ -490,11 +498,11 @@ namespace GamepadTweaks
             return ret;
         }
 
-        private Hook<IsIconReplaceableDelegate> isIconReplaceableHook;
+        private Hook<IsIconReplaceableDelegate> IsIconReplaceableHook;
         private delegate ulong IsIconReplaceableDelegate(uint actionID);
         private ulong IsIconReplaceableDetour(uint actionID) => 1;
 
-        private Hook<GetIconDelegate> getIconHook;
+        private Hook<GetIconDelegate> GetIconHook;
         private delegate uint GetIconDelegate(IntPtr actionManager, uint actionID);
 
         // actionID: 位于技能栏上的原本的Action的ID(不是replace icon之后的).
@@ -505,7 +513,7 @@ namespace GamepadTweaks
 
             // 小奥秘卡 -> 出王冠卡 : 出王冠卡
             var comboActionID = Config.CurrentComboAction(actionID, (uint)lastComboAction, comboTimer);
-            return this.getIconHook.Original(actionManager, comboActionID);
+            return GetIconHook.Original(actionManager, comboActionID);
         }
 
         public List<Member> GetSortedPartyMembers(string order = "thmr")
@@ -706,7 +714,7 @@ namespace GamepadTweaks
 
         private async Task<int> ActionDelay(GameAction a)
         {
-            if (a.ID == LastAction.ID && Config.IsGtoffAction(a.ID) && !LastAction.HasTarget && !a.HasTarget) {
+            if (a.ID == LastAction.ID && Config.IsGtoffAction(a.ID) && !a.HasTarget) {
                 return 0;
             }
 
@@ -725,7 +733,7 @@ namespace GamepadTweaks
                     remain = Math.Max(Configuration.GlobalCoolingDown.AnimationWindow - remain, 0);
                 } else {
                     await LastAction.Wait();
-                    remain = 100;
+                    // remain = 100;
                 }
             } else if (Config.actionSchedule == "preemptive") {
                 remain = Math.Min(LastAction.AdjustedReastTimeTotalMilliseconds, Actions.Cooldown(0, adjusted: true));
@@ -733,7 +741,7 @@ namespace GamepadTweaks
 
             await Task.Delay(remain);
 
-            PluginLog.Debug($"[DelayTime] id: {a.ID}, lgroup: {lgroup}, cgroup: {cgroup}, isCasting: {Plugin.Player!.IsCasting}, lastID: {this.LastActionID}, lastTime: {this.LastTime}, remain: {remain}ms");
+            PluginLog.Debug($"[DelayTime] id: {a.ID}, target: {a.TargetID} {a.HasTarget} {Config.IsGtoffAction(a.ID)}, lt: {LastAction.TargetID}, lgroup: {lgroup}, cgroup: {cgroup}, lastID: {LastAction.ID}, lastTime: {LastTime.Second}:{LastTime.Millisecond}, remain: {remain}ms");
             return remain;
         }
 
@@ -741,7 +749,11 @@ namespace GamepadTweaks
         {
             try {
                 Plugin.Send($"/merror off");
-                if (a.HasTarget) {
+                if (TargetManager.SoftTarget is not null) {
+                    Plugin.Send($"/ac {a.Name} <t>");
+                } else if (TargetManager.FocusTarget is not null) {
+                    Plugin.Send($"/ac {a.Name} <f>");
+                } else if (a.HasTarget) {
                     var s = a.IsTargetingSelf ? "<me>" : "<t>";
                     Plugin.Send($"/ac {a.Name} {s}");
                 } else {
@@ -757,18 +769,23 @@ namespace GamepadTweaks
             return true;
         }
 
+        private bool SendPendingAction(GameAction a)
+        {
+            return this.pendingActions.Writer.TryWrite(a);
+        }
+
         public bool ExecuteAction(GameAction a, bool canTargetSelf = false)
         {
             bool ret = false;
             try {
-                this.useActionHook.Disable();
+                this.UseActionHook.Disable();
                 unsafe {
                     var am = ActionManager.Instance();
                     if (am is not null) {
-                        ret = am->UseAction(a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, (void*)a.a8);
+                        ret = UseActionHook.Original((IntPtr)am, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
                     }
                 }
-                this.useActionHook.Enable();
+                this.UseActionHook.Enable();
             } catch(Exception e) {
                 PluginLog.Fatal($"Fatal: {e}");
             }
@@ -827,11 +844,19 @@ namespace GamepadTweaks
             }
         }
 
+        private double DistanceToLocation(Vector3 pos)
+        {
+            if (!Plugin.Ready || Plugin.Player is null) return 0;
+            var me = Plugin.Player;
+            var d = Math.Sqrt(Math.Pow(pos.X - me.Position.X, 2) + Math.Pow(pos.Y - me.Position.Y, 2) + Math.Pow(pos.Z - me.Position.Z, 2));
+            return d;
+        }
+
         public void Enable()
         {
-            this.useActionHook.Enable();
-            this.isIconReplaceableHook.Enable();
-            this.getIconHook.Enable();
+            this.UseActionHook.Enable();
+            this.IsIconReplaceableHook.Enable();
+            this.GetIconHook.Enable();
             // make sure we don't have handler on this event.
             // it's ok even not registed.
             Plugin.Framework.Update -= this.UpdateFramework;
@@ -840,18 +865,18 @@ namespace GamepadTweaks
 
         public void Disable()
         {
-            this.useActionHook.Disable();
-            this.isIconReplaceableHook.Disable();
-            this.getIconHook.Disable();
+            this.UseActionHook.Disable();
+            this.IsIconReplaceableHook.Disable();
+            this.GetIconHook.Disable();
             Plugin.Framework.Update -= this.UpdateFramework;
         }
 
         public void Dispose()
         {
             Disable();
-            this.useActionHook.Dispose();
-            this.isIconReplaceableHook.Dispose();
-            this.getIconHook.Dispose();
+            this.UseActionHook.Dispose();
+            this.IsIconReplaceableHook.Dispose();
+            this.GetIconHook.Dispose();
             GC.SuppressFinalize(this);
         }
     }

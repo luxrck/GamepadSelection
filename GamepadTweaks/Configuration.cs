@@ -51,7 +51,7 @@ namespace GamepadTweaks
         [YamlMember]
         public string combo { get; set; } = String.Empty;
         [YamlMember]
-        public Dictionary<string, string> rules { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string, string> gsRules { get; set; } = new Dictionary<string, string>();
         #endregion
 
         // public Dictionary<string, uint> actions;
@@ -149,7 +149,7 @@ namespace GamepadTweaks
                 this.gs = config.gs;
                 this.gtoff = config.gtoff;
                 this.combo = config.combo;
-                this.rules = config.rules;
+                this.gsRules = config.gsRules;
 
                 this.content = content;
 
@@ -189,7 +189,7 @@ namespace GamepadTweaks
                     this.gs = config.gs;
                     this.gtoff = config.gtoff;
                     this.combo = config.combo;
-                    this.rules = config.rules;
+                    this.gsRules = config.gsRules;
 
                     this.content = content;
                 }
@@ -222,7 +222,7 @@ namespace GamepadTweaks
                 this.gtoffActions = gtoff;
 
                 var ua = new Dictionary<uint, string>();
-                foreach(var i in this.rules) {
+                foreach(var i in this.gsRules) {
                     uint actionID = 0;
                     if (Actions.Contains(i.Key)) {
                         actionID = Actions.ID(i.Key);
