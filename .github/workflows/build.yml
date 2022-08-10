@@ -39,31 +39,3 @@ jobs:
         name: build.api6
         path: ${{ env.ReleaseDir }}
         if-no-files-found: error
-
-  build_api5:
-
-    runs-on: windows-latest
-
-    steps:
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: |
-          5.0.x
-          6.0.x
-    - name: Download Dalamud(ottercorp)
-      run: |
-        cd ..
-        curl -o latest.zip https://raw.githubusercontent.com/ottercorp/dalamud-distrib/main/net5/latest.zip
-        mkdir -p lib/dalamud
-        unzip latest.zip -d lib/dalamud
-    - uses: actions/checkout@v2
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet publish --configuration Release
-    - uses: actions/upload-artifact@v2
-      with:
-        name: build.api5
-        path: ${{ env.ReleaseDir }}
-        if-no-files-found: error

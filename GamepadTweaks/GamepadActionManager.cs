@@ -111,13 +111,16 @@ namespace GamepadTweaks
             // this.UseActionLocationHook = new Hook<UseActionLocationDelegate>(useActionLocation, this.UseActionLocationDetour);
 
             var useAction = SigScanner.ScanText("E8 ?? ?? ?? ?? EB 64 B1 01");
-            this.UseActionHook = new Hook<UseActionDelegate>(useAction, this.UseActionDetour);
+            // this.UseActionHook = new Hook<UseActionDelegate>(useAction, this.UseActionDetour);
+            this.UseActionHook = Hook<UseActionDelegate>.FromAddress(useAction, this.UseActionDetour);
 
             var getIcon = SigScanner.ScanText("E8 ?? ?? ?? ?? 8B F8 3B DF");
-            this.GetIconHook = new Hook<GetIconDelegate>(getIcon, this.GetIconDetour);
+            // this.GetIconHook = new Hook<GetIconDelegate>(getIcon, this.GetIconDetour);
+            this.GetIconHook = Hook<GetIconDelegate>.FromAddress(getIcon, this.GetIconDetour);
 
             var isIconReplaceable = SigScanner.ScanText("81 F9 ?? ?? ?? ?? 7F 35");
-            this.IsIconReplaceableHook = new Hook<IsIconReplaceableDelegate>(isIconReplaceable, IsIconReplaceableDetour);
+            // this.IsIconReplaceableHook = new Hook<IsIconReplaceableDelegate>(isIconReplaceable, IsIconReplaceableDetour);
+            this.IsIconReplaceableHook = Hook<IsIconReplaceableDelegate>.FromAddress(isIconReplaceable, this.IsIconReplaceableDetour);
 
             // this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("E8 ?? ?? ?? ?? 80 7E 21 00", 0x178) - 4;
             this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("F3 0F 11 05 ?? ?? ?? ?? F3 0F 10 45 ?? E8");

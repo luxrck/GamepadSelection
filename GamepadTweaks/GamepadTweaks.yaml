@@ -1,7 +1,8 @@
-name: Gamepad Tweaks (for Healers)
+name: Gamepad Tweaks
 internal_name: GamepadTweaks
 author: Sgr A*
-dalamud_api_level: 5
+dalamud_api_level: 6
 repo_url: https://github.com/luxrck/GamepadTweaks.git
+punch_line: Gamepad tweaks for ffxiv.
 description: |-
   Gamepad tweaks for ffxiv.
