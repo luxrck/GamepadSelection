@@ -15,13 +15,13 @@ namespace GamepadTweaks
         public static uint DefaultInvalidGameObjectID = 3758096384U;
         public class GlobalCoolingDown
         {
-            public static float TotalSeconds = 2.5f;
-            public static int TotalMilliseconds = 2500;
+            public static float TotalSeconds => TotalMilliseconds / 1000;
+            public static int TotalMilliseconds => Plugin.Actions.Cooldown(0, adjusted: true);
             public static int AnimationWindow = 700;
             public static int SlidingWindow = 500;
 
             //实际上也许是最后1/4个GCD时间段
-            public static int RecastWindow = 500;
+            public static int RecastWindow => (int)(TotalMilliseconds / 4);
         }
 
         int IPluginConfiguration.Version { get; set; }

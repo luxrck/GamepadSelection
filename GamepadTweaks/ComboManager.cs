@@ -330,7 +330,7 @@ namespace GamepadTweaks
             }
 
             // 因为可能需要wait, 所以放在这里
-            var cremain = Actions.RecastTimeRemain(cadjust);
+            var cremain = Actions.RecastTime(cadjust);
 
             // 到这里只存在三种状态: Ready, Pending, NotSatisfied
             switch (Type)
@@ -344,7 +344,7 @@ namespace GamepadTweaks
                         break;
                     if (cstatus == ActionStatus.Ready || cstatus == ActionStatus.NotSatisfied) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
-                    } else if (cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                    } else if (cremain > Configuration.GlobalCoolingDown.TotalMilliseconds) {
                         index = (CurrentIndex + 1) % ComboActions.Count;
                     }
                     break;
@@ -359,7 +359,7 @@ namespace GamepadTweaks
                 case ComboType.Linear:
                     if (cstatus == ActionStatus.Ready || cstatus == ActionStatus.NotSatisfied) {
                         index = (index + 1) % ComboActions.Count;
-                    } else if (cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                    } else if (cremain > Configuration.GlobalCoolingDown.TotalMilliseconds) {
                         index = (index + 1) % ComboActions.Count;
                     }
                     break;
@@ -382,13 +382,13 @@ namespace GamepadTweaks
                             // case ComboActionType.Multi:
                             case ComboActionType.SingleSkipable:
                             case ComboActionType.MultiSkipable:
-                                if (cstatus == ActionStatus.NotSatisfied && caction.Executed || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                                if (cstatus == ActionStatus.NotSatisfied && caction.Executed || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalMilliseconds) {
                                     index += 1; // caction.Restore();
                                 }
                                 break;
                             // 全跳
                             case ComboActionType.Skipable:
-                                if (cstatus == ActionStatus.NotSatisfied || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                                if (cstatus == ActionStatus.NotSatisfied || cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalMilliseconds) {
                                     index += 1;
                                 }
                                 break;
@@ -418,7 +418,7 @@ namespace GamepadTweaks
                                 if (caction.Finished) { // Count >= MaximumCount
                                     index += 1; break;
                                 }
-                                if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalSeconds) {
+                                if (cstatus == ActionStatus.Pending && cremain > Configuration.GlobalCoolingDown.TotalMilliseconds) {
                                     index += 1; animationDelay = 0;
                                 } else if (cstatus == ActionStatus.Ready) {
                                     if (succeed) {
@@ -432,8 +432,8 @@ namespace GamepadTweaks
                                         var nadjust = Actions.AdjustedActionID(naction.ID);
                                         var nstatus = Actions.ActionStatus(nadjust);
                                         var nrgroup = Actions.RecastGroup(nadjust);
-                                        var nremain = Actions.RecastTimeRemain(nadjust);
-                                        if (nstatus == ActionStatus.Ready || nrgroup == crgroup || nstatus == ActionStatus.Pending && nremain <= Configuration.GlobalCoolingDown.TotalSeconds) {
+                                        var nremain = Actions.RecastTime(nadjust);
+                                        if (nstatus == ActionStatus.Ready || nrgroup == crgroup || nstatus == ActionStatus.Pending && nremain <= Configuration.GlobalCoolingDown.TotalMilliseconds) {
                                             index += 1; // caction.Restore();
                                         }
                                     }

@@ -76,8 +76,8 @@ namespace GamepadTweaks
         // 由于即刻咏唱等的存在, CastTime必须动态获取
         // TODO: Should get Action cast detail info even not in casting.
         public int CastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: false);
-        public int AdjustedCastTimeTotalMilliseconds => Plugin.Actions.Cooldown(ID, adjusted: true);
-        public int AdjustedReastTimeTotalMilliseconds => (int)(Plugin.Actions.RecastTimeRemain(ID) * 1000);
+        public int AdjustedCastTimeTotalMilliseconds => Plugin.Actions.CastTime(ID, adjusted: true);
+        public int AdjustedReastTimeTotalMilliseconds => Plugin.Actions.RecastTime(ID);
 
         public bool CanCastImmediatly => AdjustedCastTimeTotalMilliseconds == 0;
         public bool Finished = false;
@@ -390,21 +390,12 @@ namespace GamepadTweaks
             return (GamepadTweaks.ActionStatus)status;
         }
 
-        // // Broken
-        // public float CastTime(uint actionID)
-        // {
-        //     float cast = 0f;
-        //     unsafe {
-        //         var am = (ActionManagerFields*)ActionManager.Instance();
-        //         if (am != null) {
-        //             // cast = am->GetAdjustedCastTime(ActionType(actionID), actionID);
-        //             if (am->IsCasting && am->CurrentGCDAction == actionID) {
-        //                 cast = am->CastTime;
-        //             }
-        //         }
-        //     }
-        //     return cast;
-        // }
+        public int CastTime(uint actionID, bool adjusted = true)
+        {
+            unsafe {
+                return ActionManager.GetAdjustedCastTime(ActionType(actionID), actionID);
+            }
+        }
 
         // Auto Attack, DoT and HoT Strength:
         //      f(SPD) = ( 1000 + ⌊ 130 × ( SS - Level Lv, SUB ) / Level Lv, DIV ⌋ ) / 1000
@@ -503,17 +494,16 @@ namespace GamepadTweaks
             return (int)(gcd3() / 100);
         }
 
-        public float RecastTimeRemain(uint actionID)
+        public int RecastTime(uint actionID)
         {
-            float recast = 0f;
+            int recast = 0;
             unsafe {
                 var am = ActionManager.Instance();
                 if (am != null) {
                     var elapsed = am->GetRecastTimeElapsed(ActionType(actionID), actionID);
                     var total = am->GetRecastTime(ActionType(actionID), actionID);
-                    // var atotal = am->GetAdjustedRecastTime(ActionType(actionID), actionID);
-                    // var acast = am->GetAdjustedCastTime(ActionType(actionID), actionID,1,1);
-                    recast = total - elapsed;
+                    recast = (int)((total - elapsed) * 1000);
+                    // return ActionManager.GetAdjustedRecastTime(ActionType(actionID), actionID);
                 }
             }
             return recast;

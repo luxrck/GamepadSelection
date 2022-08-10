@@ -341,6 +341,30 @@ namespace GamepadTweaks
                         SendPendingAction(a);
                         PluginLog.Debug($"[UseAction] GtoffAction delay.");
                         return false;
+
+                        // unsafe {
+                        //     UseActionHook.Disable();
+                        //     var am = ActionManager.Instance();
+                        //     if (am != null) {
+                        //         // var tgt = a.HasTarget ? Objects.SearchById(a.TargetID) : me;
+                        //         var tgt = TargetManager.SoftTarget ?? TargetManager.FocusTarget ?? (a.HasTarget ? Objects.SearchById(a.TargetID) : null);
+                        //         if (tgt is not null && tgt.IsValid()) {
+                        //             var p = new Vector3() {
+                        //                 X = tgt.Position.X,
+                        //                 Y = tgt.Position.Y,
+                        //                 Z = tgt.Position.Z
+                        //             };
+                        //             ret = am->UseActionLocation(a.Type, a.ID, tgt.ObjectId, &p);
+                        //         } else {
+                        //             ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
+                        //             ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
+                        //         }
+                        //     }
+                        //     UseActionHook.Enable();
+                        // }
+
+                        // state = GamepadActionManagerState.ActionExecuted;
+                        // goto MainLoop;
                     } else if (Config.IsGsAction(actionID) || Config.IsGsAction(adjustedID)) {
                         // if (status == ActionStatus.Ready && pmap.Any(x => x.ID == targetedActorID)) {
                         // 1. targetID不是队友, 进入GSM
@@ -467,7 +491,7 @@ namespace GamepadTweaks
                         var ginput = (GamepadInput*)GamepadState.GamepadInputAddress;
                         this.savedButtonsPressed = (ushort)(ginput->ButtonsPressed & 0xff);
 
-                        PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, {status}, iscasting: {me.IsCasting}, casttime: {a.AdjustedCastTimeTotalMilliseconds}, action: {Plugin.Actions.Name(adjustedID)}, ID: {adjustedID}, UseType: {a.UseType}");
+                        PluginLog.Debug($"[UseAction][{this.state}] ret: {ret}, {status}, iscasting: {me.IsCasting}, casttime: {a.AdjustedCastTimeTotalMilliseconds}, recast: {a.AdjustedReastTimeTotalMilliseconds}, action: {Plugin.Actions.Name(adjustedID)}, ID: {adjustedID}, UseType: {a.UseType}");
                     }
 
                     this.state = GamepadActionManagerState.Start;
