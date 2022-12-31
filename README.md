@@ -1,6 +1,6 @@
 ## GamepadTweaks
 
-[![Build](https://img.shields.io/github/workflow/status/luxrck/GamepadTweaks/Build?style=for-the-badge)](https://github.com/luxrck/GamepadTweaks/blob/master/.github/workflows/build.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/luxrck/GamepadTweaks/build.yml?branch=master)](https://github.com/luxrck/GamepadTweaks/blob/master/.github/workflows/build.yml)
 
 ##### Gamepad Selection
 Using `y/b/a/x` and Dpad `up/right/down/left` buttons to directly select party member no.1 ~ no.8 when casting monitored **single-target** actions.

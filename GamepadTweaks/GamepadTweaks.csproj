@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <DalamudLibPath Condition="$(DalamudLibPath) == ''">../lib/7.3.4.0</DalamudLibPath>
+    <DalamudLibPath Condition="$(DalamudLibPath) == ''">../lib/dalamud</DalamudLibPath>
   </PropertyGroup>
 
   <ItemGroup>
