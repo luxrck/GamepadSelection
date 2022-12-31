@@ -18,7 +18,7 @@ namespace GamepadTweaks
             public static float TotalSeconds => TotalMilliseconds / 1000;
             public static int TotalMilliseconds => Plugin.Actions.Cooldown(0, adjusted: true);
             public static int AnimationWindow = 700;
-            public static int SlidingWindow = 500;
+            public static int SlidingWindow = TotalMilliseconds / 5;
 
             //实际上也许是最后1/4个GCD时间段
             public static int RecastWindow => (int)(TotalMilliseconds / 4);
@@ -38,6 +38,7 @@ namespace GamepadTweaks
         public string actionSchedule { get; set; } = "none";    // none, preemptive, non-preemptive
         [YamlMember]
         public int actionRetry { get; set; } = 1;
+        public bool useActionLocation { get; set; } = false;
         [YamlMember]
         public string priority { get; set; } = "y b a x up right down left";
         public List<string> gtoff { get; set; } = new List<string>();
@@ -145,6 +146,7 @@ namespace GamepadTweaks
                 this.targeting = config.targeting;
                 this.actionSchedule = config.actionSchedule;
                 this.actionRetry = config.actionRetry;
+                this.useActionLocation = config.useActionLocation;
                 this.priority = config.priority;
                 this.gs = config.gs;
                 this.gtoff = config.gtoff;
@@ -185,6 +187,7 @@ namespace GamepadTweaks
                     this.targeting = config.targeting;
                     this.actionSchedule = config.actionSchedule;
                     this.actionRetry = config.actionRetry;
+                    this.useActionLocation = config.useActionLocation;
                     this.priority = config.priority;
                     this.gs = config.gs;
                     this.gtoff = config.gtoff;

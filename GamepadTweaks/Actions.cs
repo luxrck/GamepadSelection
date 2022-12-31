@@ -108,7 +108,7 @@ namespace GamepadTweaks
 
                     var current = start;
 
-                    if (total - current < Configuration.GlobalCoolingDown.SlidingWindow) return false;
+                    if (total - current < Configuration.GlobalCoolingDown.SlidingWindow) return true;
 
                     // 滑步!!!
                     var before = DateTime.Now;
@@ -123,7 +123,8 @@ namespace GamepadTweaks
                     PluginLog.Debug($"[Casting] action: {Plugin.Actions.Name(ID)}, start: {start}, total: {total} {(after - before).TotalMilliseconds}");
                     var passed = (after - before).TotalMilliseconds;
                     if (passed >= (total - start - eps)) Finished = true;
-                    await Task.Delay((int)passed - total + start + eps);
+                    // await Task.Delay((int)passed - total + start + eps);
+                    await Task.Delay(Math.Max(total - start - eps - (int)passed, 0));
                     return Finished;
                 } else {
                     // why reach here ???
@@ -246,7 +247,7 @@ namespace GamepadTweaks
                 PluginLog.Debug($"Load Action Alias Data: {Configuration.AliasFile}");
                 var alias = File.ReadAllText(Configuration.AliasFile);
                 BuildAliasInfo(alias);
-                // TestAliasInfo();
+                TestAliasInfo();
 
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
@@ -445,10 +446,11 @@ namespace GamepadTweaks
                 if (me.IsCasting && me.CastActionId == info.ID) return (int)(me.TotalCastTime * 1000);
                 cast = info.CastTime;
             } else {
-                cast = Configuration.GlobalCoolingDown.TotalMilliseconds;
+                cast = 2500;
             }
 
             if (!adjusted) return cast;
+            // return cast;
 
             // Spellspeed or Skillspeed
             var ss = cast > 0 ? Plugin.PlayerSpellSpeed : Plugin.PlayerSkillSpeed;

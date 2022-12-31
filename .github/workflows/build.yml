@@ -21,12 +21,11 @@ jobs:
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: |
-          5.0.x
           6.0.x
     - name: Download Dalamud(goatcorp)
       run: |
         cd ..
-        curl -o latest.zip https://goatcorp.github.io/dalamud-distrib/latest.zip
+        curl -o latest.zip https://github.com/goatcorp/dalamud-distrib/raw/main/latest.zip
         mkdir -p lib/dalamud
         unzip latest.zip -d lib/dalamud
     - uses: actions/checkout@v2

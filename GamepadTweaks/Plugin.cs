@@ -54,7 +54,7 @@ namespace GamepadTweaks
             get {
                 if (!Plugin.Ready) return 0;
                 unsafe {
-                    return *(uint*)(SigScanner.Module.BaseAddress + 0x1e9fe4c);
+                    return *(uint*)(SigScanner.Module.BaseAddress + 0x208824C);
                 }
             }
         }
@@ -63,7 +63,7 @@ namespace GamepadTweaks
             get {
                 if (!Plugin.Ready) return 0;
                 unsafe {
-                    return *(uint*)(SigScanner.Module.BaseAddress + 0x1e9fe48);
+                    return *(uint*)(SigScanner.Module.BaseAddress + 0x2088248);
                 }
             }
         }
@@ -120,6 +120,9 @@ namespace GamepadTweaks
                 switch(argv[0])
                 {
                     case "test":
+                        PluginLog.Debug($"SpellSp: {PlayerSpellSpeed}");
+                        PluginLog.Debug($"SkillSp: {PlayerSkillSpeed}");
+                        PluginLog.Debug($"GCD: {Plugin.Actions.Cooldown(0, adjusted: true)}");
                         return;
                     case "config":
                         var editor = new Process() {

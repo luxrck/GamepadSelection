@@ -102,6 +102,9 @@ namespace GamepadTweaks
         private ObjectTable Objects = Plugin.Objects;
         private TargetManager TargetManager = Plugin.TargetManager;
 
+        private bool Enabled = true;
+        private bool Disabled = false;
+
         public GamepadActionManager()
         {
             this.LastGsAction = new GameAction();
@@ -114,11 +117,12 @@ namespace GamepadTweaks
             // this.UseActionHook = new Hook<UseActionDelegate>(useAction, this.UseActionDetour);
             this.UseActionHook = Hook<UseActionDelegate>.FromAddress(useAction, this.UseActionDetour);
 
+            // https://github.com/attickdoor/XIVComboPlugin/blob/master/XIVComboPlugin/IconReplacerAddressResolver.cs
             var getIcon = SigScanner.ScanText("E8 ?? ?? ?? ?? 8B F8 3B DF");
             // this.GetIconHook = new Hook<GetIconDelegate>(getIcon, this.GetIconDetour);
             this.GetIconHook = Hook<GetIconDelegate>.FromAddress(getIcon, this.GetIconDetour);
 
-            var isIconReplaceable = SigScanner.ScanText("81 F9 ?? ?? ?? ?? 7F 35");
+            var isIconReplaceable = SigScanner.ScanText("E8 ?? ?? ?? ?? 84 C0 74 4C 8B D3");
             // this.IsIconReplaceableHook = new Hook<IsIconReplaceableDelegate>(isIconReplaceable, IsIconReplaceableDetour);
             this.IsIconReplaceableHook = Hook<IsIconReplaceableDelegate>.FromAddress(isIconReplaceable, this.IsIconReplaceableDetour);
 
@@ -138,95 +142,14 @@ namespace GamepadTweaks
             // if (!me.StatusFlags.HasFlag(StatusFlags.InCombat) && !me.StatusFlags.HasFlag(StatusFlags.WeaponOut)) {
             //     Plugin.Config.ResetComboState(0);
             // }
-            if (!Condition[ConditionFlag.BoundByDuty] &&
-                !Condition[ConditionFlag.InCombat] &&
-                !Condition[ConditionFlag.InDeepDungeon] &&
-                !Condition[ConditionFlag.InDuelingArea])
-            {
-                Config.ResetComboState(0);
-            }
-
-
-            // macro
-            Task.Run(async () => {
-                var suc = this.pendingActions.Reader.TryRead(out var m);
-
-                // 顺序执行命令
-                await this.actionLock.WaitAsync();
-
-                if (suc && m is not null) {
-                    if (!Plugin.Ready) goto TaskRet;
-
-                    var ret = false;
-                    var act = Actions.ActionType(m.ID);
-                    var adj = Actions.AdjustedActionID(m.ID);
-
-                    var retry = Config.actionRetry;
-
-                TaskRetry:
-                    if (retry < 0) goto TaskRet;
-                    retry -= 1;
-
-                    var savedLastTime = this.LastTime;
-
-                    if (Config.actionSchedule != "none")
-                        await ActionDelay(m);
-
-                    //Check Plugin status after delay.
-                    if (!Plugin.Ready) goto TaskRet;
-
-                    // PluginLog.Debug($"[ExecuteAction Async] {m.ID} Targeted: {m.Targeted} {m.DelayTo} {DateTime.Now} {(m.DelayTo - DateTime.Now).TotalMilliseconds}");
-                    if (savedLastTime != this.LastTime) goto TaskRetry;
-
-                    if (m.Status == ActionStatus.Delay) {
-                        this.SendAction(m);
-                    } else if (m.Status == ActionStatus.LocalDelay) {
-                        ret = this.ExecuteAction(m);
-                    }
-
-                    // PluginLog.Debug($"[UseActionAsync] wait? {delay}ms {m.ID} {m.TargetID} {m.Status} ret: {ret}, lastID: {this.LastActionID}, lastTime: {this.LastTime}");
-
-                    if (ret) {
-                        this.LastTime = DateTime.Now;
-                        this.LastActionID = m.ID;
-                        this.LastAction = m;
-                        // this.LastAction.Writer.TryWrite(m);
-                    }
-
-                    // status == NotSatisfied -> return false;
-                    if (m.Type == ActionType.Spell) {
-                        m.Status = ActionStatus.Ready;
-                        m.LastTime = DateTime.Now;
-                        this.executedActions.Writer.TryWrite((m, ret));
-                    }
-                }
-
-            TaskRet:
-                // releae lock?
-                this.actionLock.Release();
-            });
-
-            // combo
-            Task.Run(async () => {
-                if (!Plugin.Ready) return;
-
-                try {
-                    if (this.executedActions.Reader.TryRead(out (GameAction Action, bool Result) a)) {
-                        // PluginLog.Debug($"[UpdateComboStateAsync] update action: {a.Action.ID}, iscombo?: {Config.IsComboAction(a.Action.ID)} {Actions.Equals(25800, 7429)}");
-                        if (Config.IsComboAction(a.Action.ID)) {
-                            await Config.UpdateComboState(a.Action, a.Result);
-                        }
-                    } else {
-                        await Task.Delay(50);
-                        await Config.UpdateComboState(new GameAction() {ID = 0, Finished = true});
-                    }
-                } catch(Exception e) {
-                    PluginLog.Error($"Exception: {e}");
-                }
-            });
-            // Update combo action icon.
-            // if (Config.IsComboAction(action) && Config.UpdateComboState(action, status)) {}
-            // else if (Config.IsComboAction(adjusted) && Config.UpdateComboState(adjusted, status)) {}
+            // if (!Condition[ConditionFlag.BoundByDuty] &&
+            // if (!Condition[ConditionFlag.InCombat] &&
+            //     !me.StatusFlags.HasFlag(StatusFlags.WeaponOut) &&
+            //     !Condition[ConditionFlag.InDeepDungeon] &&
+            //     !Condition[ConditionFlag.InDuelingArea])
+            // {
+            //     Config.ResetComboState(0);
+            // }
         }
 
         // private Hook<UseActionLocationDelegate> UseActionLocationHook;
@@ -337,34 +260,38 @@ namespace GamepadTweaks
 
                         // am->UseActionLocation有时会出现内存访问错误, 导致游戏崩溃
                         // 因此转而采用宏来实现
-                        a.Status = ActionStatus.Delay;
-                        SendPendingAction(a);
-                        PluginLog.Debug($"[UseAction] GtoffAction delay.");
-                        return false;
 
-                        // unsafe {
-                        //     UseActionHook.Disable();
-                        //     var am = ActionManager.Instance();
-                        //     if (am != null) {
-                        //         // var tgt = a.HasTarget ? Objects.SearchById(a.TargetID) : me;
-                        //         var tgt = TargetManager.SoftTarget ?? TargetManager.FocusTarget ?? (a.HasTarget ? Objects.SearchById(a.TargetID) : null);
-                        //         if (tgt is not null && tgt.IsValid()) {
-                        //             var p = new Vector3() {
-                        //                 X = tgt.Position.X,
-                        //                 Y = tgt.Position.Y,
-                        //                 Z = tgt.Position.Z
-                        //             };
-                        //             ret = am->UseActionLocation(a.Type, a.ID, tgt.ObjectId, &p);
-                        //         } else {
-                        //             ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
-                        //             ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
-                        //         }
-                        //     }
-                        //     UseActionHook.Enable();
-                        // }
-
-                        // state = GamepadActionManagerState.ActionExecuted;
-                        // goto MainLoop;
+                        if (Config.useActionLocation) {
+                            unsafe {
+                                UseActionHook.Disable();
+                                var am = ActionManager.Instance();
+                                if (am != null) {
+                                    // var tgt = a.HasTarget ? Objects.SearchById(a.TargetID) : me;
+                                    var tgt = TargetManager.SoftTarget ?? TargetManager.FocusTarget ?? (a.HasTarget ? Objects.SearchById(a.TargetID) : me);
+                                    if (tgt is not null && tgt.IsValid()) {
+                                        var p = new Vector3() {
+                                            X = tgt.Position.X,
+                                            Y = tgt.Position.Y,
+                                            Z = tgt.Position.Z
+                                        };
+                                        ret = am->UseActionLocation(a.Type, a.ID, tgt.ObjectId, &p);
+                                        // ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, tgt.ObjectId, a.param, a.UseType, a.pvp, a.a8);
+                                    } else {
+                                        ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
+                                        ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
+                                    }
+                                    PluginLog.Debug($"[UseAction] GtoffAction: {a.Name} {a.ID}, target: {tgt}");
+                                }
+                                UseActionHook.Enable();
+                            }
+                            state = GamepadActionManagerState.ActionExecuted;
+                            goto MainLoop;
+                        } else {
+                            a.Status = ActionStatus.Delay;
+                            SendPendingAction(a);
+                            PluginLog.Debug($"[UseAction] GtoffAction delay.");
+                            return false;
+                        }
                     } else if (Config.IsGsAction(actionID) || Config.IsGsAction(adjustedID)) {
                         // if (status == ActionStatus.Ready && pmap.Any(x => x.ID == targetedActorID)) {
                         // 1. targetID不是队友, 进入GSM
@@ -519,7 +446,7 @@ namespace GamepadTweaks
                 bool suc = this.executedActions.Writer.TryWrite((a, ret));
                 if (!suc) {
                     PluginLog.Debug($"[UseAction] executedActions write failed.");
-                }
+               } 
             }
 
             return ret;
@@ -785,9 +712,10 @@ namespace GamepadTweaks
                     Plugin.Send($"/ac {a.Name} {s}");
                 } else {
                     if (Config.IsGtoffAction(a.ID)) {
+                        Plugin.Send($"/ac {a.Name} <me>");
+                    } else {
                         Plugin.Send($"/ac {a.Name}");
                     }
-                    Plugin.Send($"/ac {a.Name}");
                 }
             } catch(Exception e) {
                 PluginLog.Error($"Exception: {e}");
@@ -888,6 +816,101 @@ namespace GamepadTweaks
             // it's ok even not registed.
             Plugin.Framework.Update -= this.UpdateFramework;
             Plugin.Framework.Update += this.UpdateFramework;
+
+            this.Enabled = true;
+            this.Disabled = false;
+
+            Task.Run(async () => {
+                while (true) {
+                    if (!Enabled) {
+                        this.Disabled = true;
+                        return;
+                    }
+
+                    if (!Plugin.Ready || Plugin.Player is null) {
+                        await Task.Delay(50);
+                        continue;
+                    };
+
+                    var me = Plugin.Player;
+                
+                // macro
+                    var suc = this.pendingActions.Reader.TryRead(out var m);
+
+                    // 顺序执行命令
+                    await this.actionLock.WaitAsync();
+
+                    if (suc && m is not null) {
+                        if (!Plugin.Ready) goto TaskRet;
+
+                        var ret = false;
+                        var act = Actions.ActionType(m.ID);
+                        var adj = Actions.AdjustedActionID(m.ID);
+
+                        var retry = Config.actionRetry;
+
+                    TaskRetry:
+                        if (retry < 0) goto TaskRet;
+                        retry -= 1;
+
+                        var savedLastTime = this.LastTime;
+
+                        if (Config.actionSchedule != "none")
+                            await ActionDelay(m);
+
+                        //Check Plugin status after delay.
+                        if (!Plugin.Ready) goto TaskRet;
+
+                        // PluginLog.Debug($"[ExecuteAction Async] {m.ID} Targeted: {m.Targeted} {m.DelayTo} {DateTime.Now} {(m.DelayTo - DateTime.Now).TotalMilliseconds}");
+                        if (savedLastTime != this.LastTime) goto TaskRetry;
+
+                        if (m.Status == ActionStatus.Delay) {
+                            this.SendAction(m);
+                        } else if (m.Status == ActionStatus.LocalDelay) {
+                            ret = this.ExecuteAction(m);
+                        }
+
+                        // PluginLog.Debug($"[UseActionAsync] wait? {delay}ms {m.ID} {m.TargetID} {m.Status} ret: {ret}, lastID: {this.LastActionID}, lastTime: {this.LastTime}");
+
+                        if (ret) {
+                            this.LastTime = DateTime.Now;
+                            this.LastActionID = m.ID;
+                            this.LastAction = m;
+                            // this.LastAction.Writer.TryWrite(m);
+                        }
+
+                        // status == NotSatisfied -> return false;
+                        if (m.Type == ActionType.Spell) {
+                            m.Status = ActionStatus.Ready;
+                            m.LastTime = DateTime.Now;
+                            this.executedActions.Writer.TryWrite((m, ret));
+                        }
+                    }
+
+                TaskRet:
+                    // releae lock?
+                    this.actionLock.Release();
+
+                // combo
+                    try {
+                        if (this.executedActions.Reader.TryRead(out (GameAction Action, bool Result) a)) {
+                            // PluginLog.Debug($"[UpdateComboStateAsync] update action: {a.Action.ID}, iscombo?: {Config.IsComboAction(a.Action.ID)} {Actions.Equals(25800, 7429)}");
+                            if (Config.IsComboAction(a.Action.ID)) {
+                                await Config.UpdateComboState(a.Action, a.Result);
+                            }
+                        } else {
+                            await Config.UpdateComboState(new GameAction() {ID = 0, Finished = true});
+                        }
+                    } catch(Exception e) {
+                        PluginLog.Error($"Exception: {e}");
+                    }
+                // Update combo action icon.
+                // if (Config.IsComboAction(action) && Config.UpdateComboState(action, status)) {}
+                // else if (Config.IsComboAction(adjusted) && Config.UpdateComboState(adjusted, status)) {}
+                    
+                    await Task.Delay(50);
+                }
+            });
         }
 
         public void Disable()
@@ -896,6 +919,9 @@ namespace GamepadTweaks
             this.IsIconReplaceableHook.Disable();
             this.GetIconHook.Disable();
             Plugin.Framework.Update -= this.UpdateFramework;
+
+            this.Enabled = false;
+            while (!Disabled);
         }
 
         public void Dispose()

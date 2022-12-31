@@ -80,7 +80,7 @@ namespace GamepadTweaks
         public int LastIndex = 0;
 
         public static Actions Actions = Plugin.Actions;
-
+        
         private SemaphoreSlim actionLock = new SemaphoreSlim(1, 1);
         private SemaphoreSlim actionLockHighPriority = new SemaphoreSlim(1, 1);
 
@@ -448,15 +448,17 @@ namespace GamepadTweaks
                                             caction.Update(); // <---- 防止卡住. 点两次
                                         }
                                     } else if (caction.Type == ComboActionType.SingleSkipable || caction.Type == ComboActionType.MultiSkipable || caction.Type == ComboActionType.Skipable) {
+                                        caction.Update();   // 不满足点一次跳过
                                         index += 1; animationDelay = 0; // caction.Restore();  // 点一次
-                                        // caction.Update();   // 不满足点一次跳过
                                     }
                                 }
                                 break;
                             case ComboActionType.Blocking:  // Pending ?
                                 if (cstatus == ActionStatus.Ready) {
-                                    if (succeed)
+                                    if (succeed) {
+                                        caction.Update();
                                         index += 1;
+                                    }
                                 } else {
                                     // caction.Count += 1;
                                     caction.Update();
@@ -467,13 +469,15 @@ namespace GamepadTweaks
                                 break;
                             case ComboActionType.Group:
                                 if (cstatus == ActionStatus.Ready) {
-                                    if (succeed)
+                                    if (succeed) {
+                                        caction.Update();
                                         index += 1;
+                                    }
                                 }
                                 break;
                         }
 
-                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {a.Name}, id: {a.ID}, exec?: {caction.Executed}, status: {cstatus}, type: {caction.Type}, count: {caction.Count}, ucount: {caction.MaximumCount}, crgroup: {crgroup}, remain: {cremain}, iscasting: {Plugin.Player!.IsCasting}, usetype: {a.UseType}");
+                        PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, CurrentIndex: {CurrentIndex}, origIndex: {originalIndex}, index: {index}, action: {a.Name}, id: {a.ID}, caction.ID: {caction.ID}, exec?: {caction.Executed}, status: {cstatus}, succeed:{succeed}, type: {caction.Type}, count: {caction.Count}, ucount: {caction.MaximumCount}, crgroup: {crgroup}, remain: {cremain}, iscasting: {Plugin.Player!.IsCasting}, usetype: {a.UseType}");
                     }
                     break;
                 case ComboType.Async:
@@ -489,11 +493,12 @@ namespace GamepadTweaks
             // wait 20ms
             // a! && Pending -> ??? 应该忽略这个
             if (originalIndex != -1) {
-                if (originalIndex != index && CurrentIndex != index) {
+                if (originalIndex != index) {
+                // if (originalIndex != index && CurrentIndex != index) {
                     // if (animationDelay > 0)
                     // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)}");
 
-                    await Task.Delay(animationDelay);
+                    // await Task.Delay(animationDelay);
 
                     // 反正能力技之间的插入也有时间间隔, 不如等一等, 放动画
                     await Task.Delay(animationDelay);
@@ -516,7 +521,7 @@ namespace GamepadTweaks
                     this.LastActionID = a.ID;   // <---
                     this.LastIndex = lastIndex;
                     PluginLog.Debug($"lasttime update to: {this.LastTime.Second}:{this.LastTime.Millisecond}");
-                    // PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)} done");
+                    PluginLog.Debug($"[ComboStateUpdate] Group: {GroupID}, animationDelay: {animationDelay}ms. {Actions.Name(caction.ID)} -> {Actions.Name(ComboActions[index%ComboActions.Count].ID)} done");
                 } else {
                     PluginLog.Debug($"lasttime update to: {this.LastTime.Second}:{this.LastTime.Millisecond}");
                     this.LastTime = DateTime.Now;

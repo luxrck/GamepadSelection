@@ -21,8 +21,8 @@ Combo support like [XivComboPlugin](https://github.com/attickdoor/XIVComboPlugin
 Schedule and execute `/ac` commands at the right time.
 
 *Gtoff Action*
-* Internally using `/ac` commands.
-* `Action Location = SoftTarget ?? FocusTarget ?? Target`
+*  Using `/ac` commands or `UseActionLocation()`
+* `Action Location = SoftTarget ?? FocusTarget ?? Target ?? Me`
 
 ### CLI
 
@@ -54,6 +54,9 @@ targeting: auto
 action_schedule: non-preemptive
 action_retry: 1
 
+# For GtoffActions.
+use_action_location: true
+
 # Default select order for gs actions.
 # y → left <=> party member no.1 → no.8
 priority: y b a x up right down left
@@ -82,6 +85,11 @@ gs:
   - 生命回生法
   - 深谋远虑之策
   - 以太契约
+
+  - 再生
+  - 神名
+  - 神祝祷
+  - 水流幕
 
 # Key: Action / ActionID
 # Val: Select order string, will use `priority` value in config if val is "" or "default".
@@ -121,4 +129,4 @@ combo: |-
 
 ### Pre-included Actions
 
-See [assets/Actions.json](assets/Actions.json), full Actions could be seen at [Actions.csv](https://github.com/xivapi/ffxiv-datamining/csv/Action.csv) for XivGlobal or [Actions.CN.csv](https://github.com/thewakingsands/ffxiv-datamining-cn/Action.csv) for XivCN.
+See [assets/Actions.json](assets/Actions.json) for more details, full Actions could be seen at [Actions.csv](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/Action.csv) for XivGlobal or [Actions.CN.csv](https://github.com/thewakingsands/ffxiv-datamining-cn/blob/master/Action.csv) for XivCN. Some actions may have conflict name, so we add action id as name suffix.
