@@ -14,8 +14,9 @@ using System.Runtime.ExceptionServices;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 
+using FFXIVClientStructs.FFXIV.Common.Math;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Graphics;
+// using FFXIVClientStructs.FFXIV.Client.Graphics;
 using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace GamepadTweaks
@@ -127,8 +128,11 @@ namespace GamepadTweaks
             this.IsIconReplaceableHook = Hook<IsIconReplaceableDelegate>.FromAddress(isIconReplaceable, this.IsIconReplaceableDetour);
 
             // this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("E8 ?? ?? ?? ?? 80 7E 21 00", 0x178) - 4;
-            this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("F3 0F 11 05 ?? ?? ?? ?? F3 0F 10 45 ?? E8");
-            this.lastComboActionPtr = this.comboTimerPtr + 0x04;
+            // this.comboTimerPtr = SigScanner.GetStaticAddressFromSig("F3 0F 11 05 ?? ?? ?? ?? F3 0F 10 45 ?? E8");
+            unsafe {
+                this.comboTimerPtr = new IntPtr(&ActionManager.Instance()->Combo.Timer);
+                this.lastComboActionPtr = this.comboTimerPtr + 0x04;
+            }
 
             Enable();
         }
@@ -274,7 +278,7 @@ namespace GamepadTweaks
                                             Y = tgt.Position.Y,
                                             Z = tgt.Position.Z
                                         };
-                                        ret = am->UseActionLocation(a.Type, a.ID, tgt.ObjectId, &p);
+                                        ret = am->UseActionLocation(a.Type, a.ID, tgt.ObjectId, (FFXIVClientStructs.FFXIV.Common.Math.Vector3*)&p);
                                         // ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, tgt.ObjectId, a.param, a.UseType, a.pvp, a.a8);
                                     } else {
                                         ret = UseActionHook.Original(actionManager, (uint)a.Type, a.ID, a.TargetID, a.param, a.UseType, a.pvp, a.a8);
@@ -921,7 +925,7 @@ namespace GamepadTweaks
             Plugin.Framework.Update -= this.UpdateFramework;
 
             this.Enabled = false;
-            while (!Disabled);
+            // while (!Disabled);
         }
 
         public void Dispose()

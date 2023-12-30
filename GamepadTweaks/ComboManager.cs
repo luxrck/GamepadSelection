@@ -318,7 +318,7 @@ namespace GamepadTweaks
                 // PluginLog.Debug($"starting wait for action: {caction.Name} done.");
                 animationDelay = a.Finished ? 100 : 0;
                 var aa = DateTime.Now;
-                PluginLog.Debug($"Try wait. {a.ID}, finished: {a.Finished}. on Group: {GroupID}");
+                PluginLog.Debug($"Try wait. {a.ID}, finished: {a.Finished}, status: {a.Status}. on Group: {GroupID}");
                 if (!await a.Wait()) {
                     PluginLog.Debug($"[ComboStateUpdate][Casting] Group: {GroupID}, action: {caction.ID} failed.");
                     this.actionLockHighPriority.Release();
@@ -513,7 +513,7 @@ namespace GamepadTweaks
 
                     // CurrentIndex更新之后不代表就立刻转移到了下一个技能, 到GetIcon更新技能图标还有一段时间.
                     // 继续sleep, 留给GetIcon一点时间, 到图标更新完成.
-                    await Task.Delay(150);
+                    await Task.Delay(50);
 
                     // 应该做出假设: 此时已经成功转移到下一个技能, 并且技能图标已经更新.
                     // 那么需要把这之前等待的其它Task全部清除. 只处理在这之后发出的Task.

@@ -1,7 +1,7 @@
 name: Gamepad Tweaks
 internal_name: GamepadTweaks
 author: Sgr A*
-dalamud_api_level: 6
+dalamud_api_level: 8
 repo_url: https://github.com/luxrck/GamepadTweaks.git
 punchline: Gamepad tweaks for ffxiv.
 description: |-

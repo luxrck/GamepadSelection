@@ -54,7 +54,7 @@ namespace GamepadTweaks
             get {
                 if (!Plugin.Ready) return 0;
                 unsafe {
-                    return *(uint*)(SigScanner.Module.BaseAddress + 0x208824C);
+                    return *(uint*)(SigScanner.Module.BaseAddress + 0x218095C);
                 }
             }
         }
@@ -63,7 +63,7 @@ namespace GamepadTweaks
             get {
                 if (!Plugin.Ready) return 0;
                 unsafe {
-                    return *(uint*)(SigScanner.Module.BaseAddress + 0x2088248);
+                    return *(uint*)(SigScanner.Module.BaseAddress + 0x2180958);
                 }
             }
         }

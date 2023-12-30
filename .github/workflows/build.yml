@@ -12,29 +12,31 @@ env:
   DalamudLibPath: ../../lib/dalamud/
 
 jobs:
-  build_api6:
+  build_api8:
 
     runs-on: windows-latest
 
     steps:
     - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: |
-          6.0.x
+          7.0.x
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.0.2
     - name: Download Dalamud(goatcorp)
       run: |
         cd ..
-        curl -o latest.zip https://goatcorp.github.io/dalamud-distrib/latest.zip
+        curl -o latest.zip https://raw.githubusercontent.com/ottercorp/dalamud-distrib/main/stg/latest.zip
         mkdir -p lib/dalamud
         unzip latest.zip -d lib/dalamud
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
       run: dotnet publish --configuration Release
     - uses: actions/upload-artifact@v2
       with:
-        name: build.api6
+        name: build.api8
         path: ${{ env.ReleaseDir }}
         if-no-files-found: error
